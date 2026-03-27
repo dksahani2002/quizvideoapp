@@ -49,7 +49,7 @@ function Field({
 
 export function SettingsPage() {
   const loc = useLocation();
-  const { data: settings } = useSettings();
+  const { data: settings, error: settingsLoadError, isError: settingsLoadFailed } = useSettings();
   const save = useSaveSettings();
   const youtubeRef = useRef<HTMLElement | null>(null);
   const instagramRef = useRef<HTMLElement | null>(null);
@@ -403,6 +403,11 @@ export function SettingsPage() {
           </p>
         </section>
 
+        {settingsLoadFailed && settingsLoadError instanceof Error && (
+          <p className="text-sm text-red-600 dark:text-red-400 mb-2" role="alert">
+            {settingsLoadError.message}
+          </p>
+        )}
         <button
           onClick={handleSave}
           disabled={save.isPending}
@@ -411,6 +416,11 @@ export function SettingsPage() {
           {saved ? <CheckCircle size={18} /> : <Save size={18} />}
           {saved ? 'Saved!' : save.isPending ? 'Saving...' : 'Save Settings'}
         </button>
+        {save.isError && save.error instanceof Error && (
+          <p className="text-sm text-red-600 dark:text-red-400 mt-2 max-w-xl" role="alert">
+            {save.error.message}
+          </p>
+        )}
       </div>
     </div>
   );

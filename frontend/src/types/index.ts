@@ -2,6 +2,8 @@ export interface Quiz {
   question: string;
   options: [string, string, string, string];
   answerIndex: 0 | 1 | 2 | 3;
+  /** ISO 639-1 — set by server from Create Video language when generating */
+  language?: string;
 }
 
 export interface VideoItem {
@@ -50,6 +52,12 @@ export interface AppSettings {
   theme: ThemeConfig;
 }
 
+/** API theme fields used by FFmpeg (gradient + background image). */
+export type VideoThemePayload = Pick<
+  ThemeConfig,
+  'preset' | 'customStops' | 'backgroundImage' | 'backgroundOpacity'
+>;
+
 export interface GenerateRequest {
   topic: string;
   questionCount: number;
@@ -57,9 +65,19 @@ export interface GenerateRequest {
   manualQuizzes?: Quiz[];
   ttsProvider: 'system' | 'openai' | 'elevenlabs';
   theme?: Partial<ThemeConfig>;
+  /** Merged with `theme` for intro slide only. Omit to use main quiz theme. */
+  introTheme?: Partial<VideoThemePayload>;
+  /** Merged with `theme` for outro slide only. Omit to use main quiz theme. */
+  outroTheme?: Partial<VideoThemePayload>;
   textAlign?: 'left' | 'center' | 'right';
-  /** Quiz copy language (AI topic mode). */
+  /** Quiz & TTS language (ISO 639-1), topic and manual modes */
   language?: string;
+  /** Topic mode: translate English topic into quiz language (default on when quiz language is not English) */
+  translateTopic?: boolean;
+  /** Topic mode: expand topic for clearer MCQ scope (default true; extra API call) */
+  enhanceTopic?: boolean;
+  /** Topic mode: replaces default AI guideline bullets when non-empty */
+  guidelines?: string;
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   tone?: 'neutral' | 'professional' | 'friendly' | 'exam' | 'witty';
   audience?: string;

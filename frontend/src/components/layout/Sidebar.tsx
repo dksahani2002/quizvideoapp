@@ -65,7 +65,14 @@ export function Sidebar() {
       {user && (
         <div className="p-4 border-t border-[hsl(var(--border))]">
           <div className="mb-3">
-            <p className="text-sm font-medium truncate">{user.name}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-sm font-medium truncate">{user.name}</p>
+              {user.role === 'admin' && (
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[hsl(var(--primary))]/15 text-[hsl(var(--primary))]">
+                  Admin
+                </span>
+              )}
+            </div>
             <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{user.email}</p>
           </div>
           <button

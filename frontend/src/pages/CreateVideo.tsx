@@ -1,13 +1,15 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, PenLine, Loader2, CheckCircle, Volume2 } from 'lucide-react';
-import { useGenerateVideo } from '../api/videos';
+import { Sparkles, PenLine, Loader2, CheckCircle, Volume2, Languages, Wand2 } from 'lucide-react';
+import { useGenerateVideo, previewTopic } from '../api/videos';
 import { previewTts } from '../api/tts';
 import { ManualQuizForm } from '../components/quiz/ManualQuizForm';
 import { ThemePicker } from '../components/theme/ThemePicker';
-import type { Quiz, ThemeConfig } from '../types';
+import type { Quiz, ThemeConfig, VideoThemePayload } from '../types';
 import { THEME_PRESETS } from '../lib/themes';
 import { LAYOUT_PRESETS, type LayoutPresetId } from '../lib/layoutPresets';
+import { QUIZ_LANGUAGES, DEFAULT_QUIZ_LANGUAGE } from '../lib/languages';
+import { DEFAULT_MCQ_GUIDELINES } from '../lib/mcqGuidelinesDefault';
 
 export function CreateVideo() {
   const navigate = useNavigate();
@@ -21,11 +23,14 @@ export function CreateVideo() {
     { question: '', options: ['', '', '', ''], answerIndex: 0 },
   ]);
 
-  const [language, setLanguage] = useState('English');
+  const [language, setLanguage] = useState<string>(DEFAULT_QUIZ_LANGUAGE);
+  const [translateTopic, setTranslateTopic] = useState(false);
+  const [enhanceTopic, setEnhanceTopic] = useState(true);
   const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('intermediate');
   const [tone, setTone] = useState<'neutral' | 'professional' | 'friendly' | 'exam' | 'witty'>('neutral');
   const [audience, setAudience] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
+  const [mcqGuidelines, setMcqGuidelines] = useState(DEFAULT_MCQ_GUIDELINES);
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
 
   const [layoutPresetId, setLayoutPresetId] = useState<LayoutPresetId>('balanced');
@@ -39,6 +44,9 @@ export function CreateVideo() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const [topicActionLoading, setTopicActionLoading] = useState<null | 'translate' | 'enhance'>(null);
+  const [topicActionError, setTopicActionError] = useState<string | null>(null);
 
   const [openaiVoice, setOpenaiVoice] = useState('alloy');
   const [openaiTtsModel, setOpenaiTtsModel] = useState<'tts-1' | 'tts-1-hd'>('tts-1');
@@ -56,6 +64,67 @@ export function CreateVideo() {
 
   const [showTheme, setShowTheme] = useState(false);
 
+  const quizLanguageLabel = useMemo(
+    () => QUIZ_LANGUAGES.find((l) => l.code === language)?.label ?? language,
+    [language]
+  );
+
+  useEffect(() => {
+    if (language === 'en') {
+      setTranslateTopic(false);
+    } else {
+      setTranslateTopic(true);
+    }
+  }, [language]);
+
+  const [introThemeCustom, setIntroThemeCustom] = useState(false);
+  const [introThemeLocal, setIntroThemeLocal] = useState<ThemeConfig>(() => ({
+    preset: 'deep-purple',
+    customStops: [],
+    backgroundImage: '',
+    backgroundOpacity: 1,
+    textAlign: 'center',
+    fontSize: 'medium',
+  }));
+  const [outroThemeCustom, setOutroThemeCustom] = useState(false);
+  const [outroThemeLocal, setOutroThemeLocal] = useState<ThemeConfig>(() => ({
+    preset: 'deep-purple',
+    customStops: [],
+    backgroundImage: '',
+    backgroundOpacity: 1,
+    textAlign: 'center',
+    fontSize: 'medium',
+  }));
+
+  function syncIntroThemeFromMain() {
+    const activeStops =
+      theme.preset === 'custom'
+        ? theme.customStops
+        : THEME_PRESETS.find((p) => p.id === theme.preset)?.stops || [];
+    setIntroThemeLocal({ ...theme, customStops: activeStops });
+  }
+
+  function syncOutroThemeFromMain() {
+    const activeStops =
+      theme.preset === 'custom'
+        ? theme.customStops
+        : THEME_PRESETS.find((p) => p.id === theme.preset)?.stops || [];
+    setOutroThemeLocal({ ...theme, customStops: activeStops });
+  }
+
+  function themeToVideoPayload(t: ThemeConfig): VideoThemePayload {
+    const activeStops =
+      t.preset === 'custom'
+        ? t.customStops
+        : THEME_PRESETS.find((p) => p.id === t.preset)?.stops || [];
+    return {
+      preset: t.preset,
+      customStops: activeStops,
+      backgroundImage: t.backgroundImage,
+      backgroundOpacity: t.backgroundOpacity,
+    };
+  }
+
   function applyLayoutPreset(id: LayoutPresetId) {
     const p = LAYOUT_PRESETS.find((x) => x.id === id);
     if (!p) return;
@@ -64,11 +133,64 @@ export function CreateVideo() {
     if (p.headerHint) setHeaderTitle(p.headerHint);
   }
 
+  async function applyTranslateToTopic() {
+    if (language === 'en') return;
+    const t = topic.trim();
+    if (!t) {
+      setTopicActionError('Enter a topic first.');
+      return;
+    }
+    setTopicActionError(null);
+    setTopicActionLoading('translate');
+    try {
+      const r = await previewTopic({
+        topic: t,
+        language,
+        translateTopic: true,
+        enhanceTopic: false,
+        openaiModel: openaiModel.trim() || undefined,
+      });
+      setTopic(r.data.localizedLabel);
+      setTranslateTopic(false);
+    } catch (e) {
+      setTopicActionError((e as Error).message);
+    } finally {
+      setTopicActionLoading(null);
+    }
+  }
+
+  async function applyEnhanceToTopic() {
+    const t = topic.trim();
+    if (!t) {
+      setTopicActionError('Enter a topic first.');
+      return;
+    }
+    setTopicActionError(null);
+    setTopicActionLoading('enhance');
+    try {
+      const r = await previewTopic({
+        topic: t,
+        language,
+        translateTopic: translateTopic && language !== 'en',
+        enhanceTopic: true,
+        openaiModel: openaiModel.trim() || undefined,
+      });
+      setTopic(r.data.promptSubject);
+      setEnhanceTopic(false);
+      if (language !== 'en') setTranslateTopic(false);
+    } catch (e) {
+      setTopicActionError((e as Error).message);
+    } finally {
+      setTopicActionLoading(null);
+    }
+  }
+
   async function handlePreviewVoice() {
     setPreviewError(null);
     setPreviewLoading(true);
     try {
       const blob = await previewTts({
+        language,
         ttsProvider,
         ...(ttsProvider === 'openai'
           ? { ttsVoice: openaiVoice, ttsModel: openaiTtsModel }
@@ -106,17 +228,22 @@ export function CreateVideo() {
       questionCount: mode === 'topic' ? questionCount : manualQuizzes.length,
       mcqSource: mode === 'topic' ? 'openai' : 'manual',
       manualQuizzes: mode === 'manual' ? manualQuizzes : undefined,
+      language,
       ttsProvider,
       theme: { ...theme, customStops: activeStops },
+      ...(introThemeCustom ? { introTheme: themeToVideoPayload(introThemeLocal) } : {}),
+      ...(outroThemeCustom ? { outroTheme: themeToVideoPayload(outroThemeLocal) } : {}),
       textAlign: theme.textAlign,
       ...(mode === 'topic'
         ? {
-            language,
             difficulty,
             tone,
             audience: audience.trim() || undefined,
             customInstructions: customInstructions.trim() || undefined,
+            guidelines: mcqGuidelines.trim() || undefined,
             openaiModel: openaiModel.trim() || undefined,
+            translateTopic,
+            enhanceTopic,
           }
         : {}),
       layoutDensity: effectiveLayoutDensity,
@@ -174,17 +301,205 @@ export function CreateVideo() {
         </button>
       </div>
 
+      {mode === 'manual' && (
+        <div
+          role="status"
+          className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-[hsl(var(--foreground))] leading-relaxed"
+        >
+          <strong className="font-semibold">Topic &amp; AI style</strong> (translate topic, enhance topic, AI guidelines) only show in{' '}
+          <strong className="font-semibold">AI-Generated (Topic)</strong> — use the first button above to switch.
+        </div>
+      )}
+
+      {/* Language — manual mode only (topic mode includes language inside Topic & AI style) */}
+      {mode === 'manual' && (
+        <div className="bg-[hsl(var(--card))] rounded-xl p-6 border border-[hsl(var(--border))] mb-6 space-y-3">
+          <h2 className="text-lg font-semibold">Language</h2>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">
+            Quiz text, voice, and on-screen copy. Use the same language you type in your questions.
+          </p>
+          <div>
+            <label htmlFor="quiz-language-manual" className="block text-xs font-medium mb-1 text-[hsl(var(--muted-foreground))]">
+              Quiz &amp; voice language
+            </label>
+            <select
+              id="quiz-language-manual"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="w-full max-w-md px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm"
+            >
+              {QUIZ_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       {/* Topic Mode */}
       {mode === 'topic' && (
         <div className="bg-[hsl(var(--card))] rounded-xl p-6 border border-[hsl(var(--border))] mb-6 space-y-5">
-          <h2 className="text-lg font-semibold">Topic & AI style</h2>
-          <input
-            type="text"
-            value={topic}
-            onChange={e => setTopic(e.target.value)}
-            placeholder="e.g. JavaScript Event Loop, World History, Science Trivia..."
-            className="w-full px-4 py-3 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]/50"
-          />
+          <h2 className="text-lg font-semibold">Topic &amp; AI style</h2>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed">
+            Choose <strong className="text-[hsl(var(--foreground))]">language</strong>, then use <strong className="text-[hsl(var(--foreground))]">Apply translate</strong> / <strong className="text-[hsl(var(--foreground))]">Apply enhance</strong> (optional), and enter your <strong className="text-[hsl(var(--foreground))]">topic</strong> in the field below.
+          </p>
+          <p className="text-xs rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/25 px-3 py-2 text-[hsl(var(--foreground))]">
+            <span className="font-semibold">Current:</span>{' '}
+            Translate{' '}
+            {language === 'en' ? (
+              <span className="text-[hsl(var(--muted-foreground))]">off (English)</span>
+            ) : translateTopic ? (
+              <span className="text-[hsl(var(--primary))]">on → {quizLanguageLabel}</span>
+            ) : (
+              <span className="text-[hsl(var(--muted-foreground))]">off</span>
+            )}
+            {' · '}
+            Enhance{' '}
+            {enhanceTopic ? (
+              <span className="text-[hsl(var(--primary))]">on</span>
+            ) : (
+              <span className="text-[hsl(var(--muted-foreground))]">off</span>
+            )}
+          </p>
+
+          <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--input))]/40 p-4 space-y-2">
+            <label htmlFor="quiz-language-topic" className="block text-sm font-medium text-[hsl(var(--foreground))]">
+              1. Quiz &amp; voice language
+            </label>
+            <p className="text-[11px] text-[hsl(var(--muted-foreground))]">
+              Pick a non-English language to use <strong>Apply translate</strong>. English can still use <strong>Apply enhance</strong>.
+            </p>
+            <select
+              id="quiz-language-topic"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="w-full max-w-lg px-3 py-2.5 rounded-lg bg-[hsl(var(--background))] border-2 border-[hsl(var(--border))] text-sm font-medium"
+            >
+              {QUIZ_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div
+            id="topic-translate-enhance"
+            className="rounded-xl border-2 border-[hsl(var(--primary))]/35 bg-[hsl(var(--primary))]/8 p-4 sm:p-5 space-y-4 shadow-sm scroll-mt-24"
+          >
+            <div>
+              <p className="text-base font-bold text-[hsl(var(--foreground))] tracking-tight">2. Translate &amp; enhance topic</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1 leading-relaxed">
+                Click to run the AI step and <strong className="text-[hsl(var(--foreground))]">fill the topic field below</strong>. Uses your OpenAI key from Settings. Checkboxes control whether translation / enhancement runs again on{' '}
+                <strong>Generate Video</strong> (turn off after applying to avoid doing it twice).
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+              <button
+                type="button"
+                disabled={language === 'en' || topicActionLoading !== null}
+                onClick={() => void applyTranslateToTopic()}
+                title={
+                  language === 'en'
+                    ? 'Choose a non-English language in step 1 to translate the topic.'
+                    : 'Translate your English topic into the quiz language and put the result in the topic field'
+                }
+                className={`flex flex-1 min-w-[min(100%,220px)] items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-sm font-semibold transition-colors border-2 min-h-[48px] ${
+                  language === 'en'
+                    ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted))]/40 text-[hsl(var(--muted-foreground))] cursor-not-allowed'
+                    : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary))]/60'
+                }`}
+              >
+                {topicActionLoading === 'translate' ? (
+                  <Loader2 size={20} className="shrink-0 animate-spin" />
+                ) : (
+                  <Languages size={20} className="shrink-0" />
+                )}
+                <span className="text-left leading-snug">
+                  {language === 'en' ? (
+                    <>Apply translate — choose language in step 1</>
+                  ) : (
+                    <>
+                      Apply translate → <span className="whitespace-nowrap">{quizLanguageLabel}</span>
+                    </>
+                  )}
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={topicActionLoading !== null}
+                onClick={() => void applyEnhanceToTopic()}
+                title="Expand the topic into a richer brief for MCQs and put it in the topic field"
+                className="flex flex-1 min-w-[min(100%,220px)] items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-sm font-semibold transition-colors border-2 min-h-[48px] border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary))]/60"
+              >
+                {topicActionLoading === 'enhance' ? (
+                  <Loader2 size={20} className="shrink-0 animate-spin" />
+                ) : (
+                  <Wand2 size={20} className="shrink-0" />
+                )}
+                <span>Apply enhance for questions</span>
+              </button>
+            </div>
+            {topicActionError && (
+              <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                {topicActionError}
+              </p>
+            )}
+            <div className="flex flex-col gap-2.5 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))]/50 px-3 py-3">
+              <label className="flex items-start gap-2.5 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-[hsl(var(--border))] accent-[hsl(var(--primary))]"
+                  checked={language !== 'en' && translateTopic}
+                  disabled={language === 'en'}
+                  onChange={(e) => setTranslateTopic(e.target.checked)}
+                />
+                <span className="text-[hsl(var(--muted-foreground))] leading-snug">
+                  <span className="font-medium text-[hsl(var(--foreground))]">Translate from English</span> when generating (quiz language)
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-[hsl(var(--border))] accent-[hsl(var(--primary))]"
+                  checked={enhanceTopic}
+                  onChange={(e) => setEnhanceTopic(e.target.checked)}
+                />
+                <span className="text-[hsl(var(--muted-foreground))] leading-snug">
+                  <span className="font-medium text-[hsl(var(--foreground))]">Enhance topic</span> for MCQs when generating
+                </span>
+              </label>
+            </div>
+            <ul className="text-[11px] text-[hsl(var(--muted-foreground))] space-y-1.5 list-disc pl-4 marker:text-[hsl(var(--primary))]">
+              <li>
+                <strong className="text-[hsl(var(--foreground))]">Translate</strong>: intro title, slide text, and{' '}
+                <code className="text-[10px] px-1 rounded bg-[hsl(var(--background))] border border-[hsl(var(--border))]">{'{{topic}}'}</code> in voice use the quiz language.
+              </li>
+              <li>
+                <strong className="text-[hsl(var(--foreground))]">Enhance</strong>: extra AI step builds a richer brief for MCQs (uses your OpenAI key).
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <label htmlFor="topic-input" className="block text-sm font-medium mb-1.5 text-[hsl(var(--foreground))]">
+              3. Topic
+            </label>
+            <p className="text-[11px] text-[hsl(var(--muted-foreground))] mb-2">
+              Type in English, or use <strong className="text-[hsl(var(--foreground))]">Apply translate</strong> / <strong className="text-[hsl(var(--foreground))]">Apply enhance</strong> above to fill this field.
+            </p>
+            <textarea
+              id="topic-input"
+              rows={3}
+              value={topic}
+              onChange={e => setTopic(e.target.value)}
+              placeholder="e.g. JavaScript Event Loop, Photosynthesis, World War II..."
+              className="w-full px-4 py-3 rounded-lg bg-[hsl(var(--input))] border-2 border-[hsl(var(--border))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]/50 focus:border-[hsl(var(--primary))]/50 resize-y min-h-20"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-2 text-[hsl(var(--muted-foreground))]">
               Number of Questions: {questionCount}
@@ -202,16 +517,7 @@ export function CreateVideo() {
             </div>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium mb-1 text-[hsl(var(--muted-foreground))]">Question language</label>
-              <input
-                value={language}
-                onChange={e => setLanguage(e.target.value)}
-                placeholder="English, Spanish, Hindi…"
-                className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm"
-              />
-            </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-xs font-medium mb-1 text-[hsl(var(--muted-foreground))]">Chat model</label>
               <input
                 value={openaiModel}
@@ -255,6 +561,28 @@ export function CreateVideo() {
               placeholder="e.g. CFA candidates, middle school, dev bootcamp students"
               className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-[hsl(var(--muted-foreground))]">
+              Quiz generation guidelines (AI)
+            </label>
+            <p className="text-[11px] text-[hsl(var(--muted-foreground))] mb-2 leading-relaxed">
+              These bullets are sent to the model as the &quot;Guidelines&quot; section. Edit freely; leave empty to use the built-in default on the server.
+            </p>
+            <textarea
+              value={mcqGuidelines}
+              onChange={(e) => setMcqGuidelines(e.target.value)}
+              rows={8}
+              spellCheck={false}
+              className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm resize-y min-h-[140px] font-mono text-[13px] leading-relaxed"
+            />
+            <button
+              type="button"
+              onClick={() => setMcqGuidelines(DEFAULT_MCQ_GUIDELINES)}
+              className="mt-2 text-xs text-[hsl(var(--primary))] hover:underline"
+            >
+              Reset to default guidelines
+            </button>
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-[hsl(var(--muted-foreground))]">Extra instructions for the AI (optional)</label>
@@ -461,7 +789,86 @@ export function CreateVideo() {
       >
         {showTheme ? 'Hide' : 'Show'} Theme Customizer
       </button>
-      {showTheme && <ThemePicker theme={theme} onChange={setTheme} />}
+      {showTheme && (
+        <div className="space-y-6">
+          <ThemePicker theme={theme} onChange={setTheme} />
+
+          <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 space-y-5">
+            <div>
+              <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Intro &amp; outro backgrounds</h3>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                By default, intro and outro use the same look as the quiz. Enable below to set a different gradient or background image for each.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-[hsl(var(--border))]"
+                  checked={introThemeCustom}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setIntroThemeCustom(on);
+                    if (on) syncIntroThemeFromMain();
+                  }}
+                />
+                <span className="text-sm">
+                  <span className="font-medium">Custom intro background</span>
+                  <span className="block text-xs text-[hsl(var(--muted-foreground))]">
+                    Gradient colors and/or background image for the opening slide only.
+                  </span>
+                </span>
+              </label>
+              {introThemeCustom && (
+                <div className="pl-7 border-l-2 border-[hsl(var(--border))]">
+                  <button
+                    type="button"
+                    onClick={syncIntroThemeFromMain}
+                    className="text-xs text-[hsl(var(--primary))] hover:underline mb-3"
+                  >
+                    Reset intro theme from main quiz theme
+                  </button>
+                  <ThemePicker theme={introThemeLocal} onChange={setIntroThemeLocal} />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3 pt-2 border-t border-[hsl(var(--border))]">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-1 rounded border-[hsl(var(--border))]"
+                  checked={outroThemeCustom}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setOutroThemeCustom(on);
+                    if (on) syncOutroThemeFromMain();
+                  }}
+                />
+                <span className="text-sm">
+                  <span className="font-medium">Custom outro background</span>
+                  <span className="block text-xs text-[hsl(var(--muted-foreground))]">
+                    Gradient colors and/or background image for the closing slide only.
+                  </span>
+                </span>
+              </label>
+              {outroThemeCustom && (
+                <div className="pl-7 border-l-2 border-[hsl(var(--border))]">
+                  <button
+                    type="button"
+                    onClick={syncOutroThemeFromMain}
+                    className="text-xs text-[hsl(var(--primary))] hover:underline mb-3"
+                  >
+                    Reset outro theme from main quiz theme
+                  </button>
+                  <ThemePicker theme={outroThemeLocal} onChange={setOutroThemeLocal} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Generate Button */}
       <button

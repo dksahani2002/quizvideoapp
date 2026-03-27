@@ -26,6 +26,9 @@ import { renderIntroSlide, renderOutroSlide } from "./utils/ffmpeg.js";
 import { Quiz } from "./types/index.js";
 import path from "path";
 import fs from "fs";
+import { mergeVideoTheme } from "./utils/videoTheme.js";
+import { resolveFontFileForLanguage } from "./utils/quizFonts.js";
+import { getQuizUiStrings, resolveIntroOutroScripts } from "./utils/quizUiStrings.js";
 import "dotenv/config";
 
 const MCQ_SOURCE = process.env.MCQ_SOURCE || "openai"; // "openai" | "file"
@@ -116,6 +119,7 @@ async function runVideoPipeline() {
     const elevenKey = process.env.ELEVENLABS_API_KEY?.trim() || "";
 
     const fontFile = "./assets/fonts/Montserrat-Bold.ttf";
+    const fontFallback = path.resolve(process.cwd(), fontFile);
     const tempDir = "./temp";
 
     // Step 3a: Generate intro/outro slides (voice matches main TTS)
@@ -136,9 +140,31 @@ async function runVideoPipeline() {
     });
 
     const lang = quizzes[0]?.language || "en";
+    const ui = getQuizUiStrings(lang);
     const topicSafe = sanitizeForTTS(TOPIC);
-    const introSpeech = `Can you answer this? This quiz is about ${topicSafe}.`;
-    const outroSpeech = "Follow for more quizzes. Like and subscribe.";
+    const { introTemplate, outroTemplate } = resolveIntroOutroScripts(lang, undefined, undefined, undefined, undefined);
+    const introSpeech = introTemplate.replace(/\{\{\s*topic\s*\}\}/gi, topicSafe);
+    const outroSpeech = outroTemplate.replace(/\{\{\s*topic\s*\}\}/gi, topicSafe);
+    const fontForSlides = resolveFontFileForLanguage(lang, fontFallback);
+    const pipelineTheme = process.env.BACKGROUND_IMAGE?.trim()
+      ? {
+          backgroundImage: path.resolve(process.cwd(), process.env.BACKGROUND_IMAGE.trim()),
+          ...(process.env.BACKGROUND_OPACITY != null && process.env.BACKGROUND_OPACITY !== ""
+            ? { backgroundOpacity: Math.min(1, Math.max(0, parseFloat(process.env.BACKGROUND_OPACITY))) }
+            : {}),
+        }
+      : undefined;
+    const themeLayerFromEnv = (imgEnv: string | undefined, opEnv: string | undefined) =>
+      imgEnv?.trim()
+        ? {
+            backgroundImage: path.resolve(process.cwd(), imgEnv.trim()),
+            ...(opEnv != null && opEnv !== ""
+              ? { backgroundOpacity: Math.min(1, Math.max(0, parseFloat(opEnv))) }
+              : {}),
+          }
+        : undefined;
+    const introTheme = mergeVideoTheme(pipelineTheme, themeLayerFromEnv(process.env.INTRO_BACKGROUND_IMAGE, process.env.INTRO_BACKGROUND_OPACITY));
+    const outroTheme = mergeVideoTheme(pipelineTheme, themeLayerFromEnv(process.env.OUTRO_BACKGROUND_IMAGE, process.env.OUTRO_BACKGROUND_OPACITY));
 
     let introVoiceFile = "./assets/audio/intro_voice.mp3";
     let outroVoiceFile = "./assets/audio/outro_voice.mp3";
@@ -151,20 +177,25 @@ async function runVideoPipeline() {
 
     console.log("🎬 Generating intro/outro slides...");
     await renderIntroSlide(introFile, TOPIC, {
-      width: 1080, height: 1920, fps: 30, fontFile,
+      width: 1080, height: 1920, fps: 30, fontFile: fontForSlides,
       voiceFile: introVoiceFile,
       bgmFile: "./assets/audio/bgm.mp3",
       dingFile: "./assets/audio/ding.mp3",
+      subtitle: ui.introSubtitle,
+      theme: introTheme,
     });
     await renderOutroSlide(outroFile, {
-      width: 1080, height: 1920, fps: 30, fontFile,
+      width: 1080, height: 1920, fps: 30, fontFile: fontForSlides,
       voiceFile: outroVoiceFile,
       bgmFile: "./assets/audio/bgm.mp3",
+      line1Text: ui.outroLine1,
+      line2Text: ui.outroLine2,
+      theme: outroTheme,
     });
     console.log("✅ Intro/outro slides ready\n");
 
     await renderVideo(quizzes, {
-      fontFile,
+      fontFile: fontFallback,
       tempDir,
       outputDir: "./output/videos",
       cacheDir: "./cache",
@@ -173,6 +204,7 @@ async function runVideoPipeline() {
       ...(tts === "openai" ? { ttsModel } : {}),
       introVideo: introFile,
       outroVideo: outroFile,
+      theme: pipelineTheme,
       elevenlabsApiKey: elevenKey || undefined,
       elevenlabsModelId: elevenModel,
       openaiApiKey: openaiKey || undefined,

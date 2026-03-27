@@ -12,6 +12,8 @@ import { VideoJob } from '../db/models/VideoJob.js';
 import { generateMCQs, MCQ } from '../agents/mcqAgent.js';
 import type { Quiz } from '../types/index.js';
 import { queueVideoJob } from '../utils/queueVideoJob.js';
+import { normalizeQuizLanguage } from '../utils/quizLanguages.js';
+import { prepareTopicForQuizGeneration } from '../utils/topicLocalization.js';
 import {
   getPresignedGetUrl,
   deleteObjectFromS3,
@@ -240,6 +242,54 @@ export function createVideosRoutes(env: EnvConfig): Router {
     }
   });
 
+  /** Preview topic translation / enhancement (same OpenAI step as generate, without creating a job). */
+  router.post('/preview-topic', async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { topic, language, translateTopic: rawTranslate, enhanceTopic: rawEnhance, openaiModel } = req.body as {
+        topic?: string;
+        language?: string;
+        translateTopic?: boolean;
+        enhanceTopic?: boolean;
+        openaiModel?: string;
+      };
+      const raw = String(topic || '').trim();
+      if (!raw) {
+        res.status(400).json({ success: false, error: 'topic required' });
+        return;
+      }
+
+      const langCode = normalizeQuizLanguage(typeof language === 'string' ? language : 'en');
+      const settings = await loadSettings(userId);
+      const openaiKey = (settings.openai.apiKey || '').trim();
+      if (!openaiKey) {
+        res.status(400).json({
+          success: false,
+          error: 'OpenAI API key required. Set it in Settings.',
+        });
+        return;
+      }
+
+      const translateTopic = Boolean(rawTranslate);
+      const enhanceTopic = Boolean(rawEnhance);
+
+      const prep = await prepareTopicForQuizGeneration({
+        apiKey: openaiKey,
+        apiUrl: settings.openai.apiUrl || 'https://api.openai.com/v1',
+        model: typeof openaiModel === 'string' ? openaiModel : undefined,
+        topicInput: raw,
+        languageCode: langCode,
+        translateTopic,
+        enhanceTopic,
+      });
+
+      res.json({ success: true, data: prep });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ success: false, error: msg });
+    }
+  });
+
   router.post('/generate', async (req: Request, res: Response) => {
     const userId = req.user!.id;
     try {
@@ -251,12 +301,15 @@ export function createVideosRoutes(env: EnvConfig): Router {
         manualQuizzes,
         ttsProvider = 'system',
         theme,
+        introTheme,
+        outroTheme,
         textAlign,
         language,
         difficulty,
         tone,
         audience,
         customInstructions,
+        guidelines,
         openaiModel,
         layoutDensity: rawLayoutDensity,
         headerTitle,
@@ -282,6 +335,8 @@ export function createVideosRoutes(env: EnvConfig): Router {
           ? Math.min(1.25, Math.max(0.75, rawLayoutDensity))
           : undefined;
 
+      const langCode = normalizeQuizLanguage(language);
+
       const settings = await loadSettings(userId);
       const openaiKey = (settings.openai.apiKey || '').trim();
       const tts = (ttsProvider || settings.tts.provider || 'system') as 'openai' | 'system' | 'elevenlabs';
@@ -293,6 +348,7 @@ export function createVideosRoutes(env: EnvConfig): Router {
 
       for (let i = 0; i < topicList.length; i++) {
         const topicItem = topicList[i];
+        let topicForDisplay = topicItem;
 
         let mcqs: MCQ[];
         if (mcqSource === 'manual' && manualQuizzes && manualQuizzes.length > 0) {
@@ -302,14 +358,35 @@ export function createVideosRoutes(env: EnvConfig): Router {
             res.status(400).json({ success: false, error: 'OpenAI API key required for AI quiz generation. Set it in Settings.' });
             return;
           }
-          mcqs = await generateMCQs(topicItem, questionCount, {
+          const translateTopic = langCode !== 'en' && req.body.translateTopic !== false;
+          const enhanceTopic = req.body.enhanceTopic !== false;
+          let topicForMcq = topicItem;
+          if (translateTopic || enhanceTopic) {
+            try {
+              const prep = await prepareTopicForQuizGeneration({
+                apiKey: openaiKey,
+                apiUrl: settings.openai.apiUrl || 'https://api.openai.com/v1',
+                model: typeof openaiModel === 'string' ? openaiModel : undefined,
+                topicInput: topicItem,
+                languageCode: langCode,
+                translateTopic,
+                enhanceTopic,
+              });
+              topicForDisplay = prep.localizedLabel;
+              topicForMcq = prep.promptSubject;
+            } catch (e) {
+              console.warn('Topic localization/enhancement failed, using raw topic:', e);
+            }
+          }
+          mcqs = await generateMCQs(topicForMcq, questionCount, {
             apiKey: openaiKey,
             apiUrl: settings.openai.apiUrl || 'https://api.openai.com/v1',
-            language: typeof language === 'string' ? language : undefined,
+            language: langCode,
             difficulty,
             tone,
             audience: typeof audience === 'string' ? audience : undefined,
             customInstructions: typeof customInstructions === 'string' ? customInstructions : undefined,
+            guidelines: typeof guidelines === 'string' ? guidelines : undefined,
             model: typeof openaiModel === 'string' ? openaiModel : undefined,
           });
           if (questionCount > 0) mcqs = mcqs.slice(0, questionCount);
@@ -323,7 +400,7 @@ export function createVideosRoutes(env: EnvConfig): Router {
               question: (mcq as any).question,
               options: options as [string, string, string, string],
               answerIndex: (mcq as any).answerIndex as 0 | 1 | 2 | 3,
-              language: 'en',
+              language: langCode,
             };
           })
           .filter((q): q is Quiz => q !== null);
@@ -337,19 +414,22 @@ export function createVideosRoutes(env: EnvConfig): Router {
         const filePath = path.resolve(path.join(userVideoDir, filename));
 
         const requestPayload = {
-          topic: topicItem,
+          topic: topicForDisplay,
           questionCount,
           mcqSource,
           manualQuizzes,
           quizzes,
           ttsProvider: tts,
           theme,
+          introTheme,
+          outroTheme,
           textAlign,
-          language,
+          language: langCode,
           difficulty,
           tone,
           audience,
           customInstructions,
+          guidelines: typeof guidelines === 'string' ? guidelines : undefined,
           openaiModel,
           layoutDensity,
           seriesName: typeof seriesName === 'string' ? seriesName.trim().slice(0, 48) : undefined,
@@ -384,7 +464,7 @@ export function createVideosRoutes(env: EnvConfig): Router {
         });
         await Video.findByIdAndUpdate(videoDoc._id, { $set: { jobId: jobDoc._id.toString() } }).catch(() => {});
 
-        created.push({ jobId: jobDoc._id.toString(), videoId: videoDoc._id.toString(), status: 'generating', topic: topicItem });
+        created.push({ jobId: jobDoc._id.toString(), videoId: videoDoc._id.toString(), status: 'generating', topic: topicForDisplay });
         void queueVideoJob(videoDoc._id.toString());
       }
 

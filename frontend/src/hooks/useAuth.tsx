@@ -53,9 +53,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => {
         if (!r.ok) throw new Error('Invalid token');
-        return r.json();
+        return r.json() as Promise<{ success: boolean; data: User; token?: string }>;
       })
-      .then(data => setUser(data.data))
+      .then((body) => {
+        setUser(body.data);
+        localStorage.setItem('user', JSON.stringify(body.data));
+        if (body.token) {
+          localStorage.setItem('token', body.token);
+          setToken(body.token);
+        }
+      })
       .catch(() => logout());
   }, [token, logout]);
 

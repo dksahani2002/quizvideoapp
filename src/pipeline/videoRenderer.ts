@@ -6,6 +6,8 @@
 import { Quiz, RenderConfig } from '../types/index.js';
 import { renderSilentVideo } from '../utils/ffmpeg.js';
 import { sanitizeForFFmpeg } from '../utils/textSanitizer.js';
+import { resolveFontFileForLanguage } from '../utils/quizFonts.js';
+import { getQuizUiStrings } from '../utils/quizUiStrings.js';
 import path from 'path';
 
 /**
@@ -54,9 +56,8 @@ export async function renderSegmentVideo(
   
   // Get the correct answer text
   const correctAnswer = quiz.options[quiz.answerIndex];
-  
-  // Generate brief explanation for the answer
-  const explanation = `The correct answer is: ${correctAnswer}`;
+  const ui = getQuizUiStrings(quiz.language);
+  const explanation = `${ui.correctAnswerPrefix} ${correctAnswer}`;
   
   // Prepare text config with sanitized text and exact timing.
   // Options persist from their start until countdown ends (cumulative reveal).
@@ -79,6 +80,8 @@ export async function renderSegmentVideo(
   
   // Update video duration to include answer reveal
   const finalVideoDuration = answerRevealEnd + config.safetyPadding;
+
+  const fontFile = resolveFontFileForLanguage(quiz.language, config.fontFile);
   
   // Render silent video with improved animations
   await renderSilentVideo(
@@ -89,12 +92,13 @@ export async function renderSegmentVideo(
     config.fps,
     textConfig,
     {
-      fontFile: config.fontFile,
+      fontFile,
       safeMargin: config.safeMargin,
       theme: config.theme,
       textAlign: config.textAlign,
       layoutDensity: config.layoutDensity,
       headerTitle: config.headerTitle,
+      correctBadgeText: ui.correctBadge,
     }
   );
   

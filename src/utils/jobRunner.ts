@@ -9,9 +9,12 @@ import { sanitizeForTTS } from '../utils/textSanitizer.js';
 import { renderVideo } from '../videoRenderer.js';
 import { uploadFileToS3 } from '../services/s3Storage.js';
 import { renderIntroSlide, renderOutroSlide } from './ffmpeg.js';
-import type { Quiz } from '../types/index.js';
+import type { Quiz, VideoTheme } from '../types/index.js';
 import type { MCQ } from '../agents/mcqAgent.js';
 import { VideoJob } from '../db/models/VideoJob.js';
+import { mergeVideoTheme } from './videoTheme.js';
+import { resolveFontFileForLanguage } from './quizFonts.js';
+import { getQuizUiStrings, resolveIntroOutroScripts } from './quizUiStrings.js';
 
 type GenerateRequestPayload = {
   topic: string;
@@ -39,6 +42,8 @@ type GenerateRequestPayload = {
   outroScript?: string;
   ctaLine?: string;
   captionsBurnIn?: boolean;
+  introTheme?: VideoTheme;
+  outroTheme?: VideoTheme;
 };
 
 const running = new Set<string>();
@@ -139,6 +144,7 @@ export async function runVideoJob(videoId: string): Promise<void> {
     if (!fs.existsSync(userVideoDir)) fs.mkdirSync(userVideoDir, { recursive: true });
 
     const fontFile = env.FONT_FILE || './assets/fonts/Montserrat-Bold.ttf';
+    const fontFallback = path.resolve(fontFile);
     const tempDir = path.join(env.TEMP_DIR, userId);
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
@@ -188,12 +194,21 @@ export async function runVideoJob(videoId: string): Promise<void> {
     });
 
     const lang = quizzes[0]?.language || 'en';
+    const ui = getQuizUiStrings(lang);
     const topicSafe = sanitizeForTTS(req.topic || 'Quiz');
-    const introTpl = (req.introScript || settings.brand?.introScript || '').trim() || 'Can you answer this? This quiz is about {{topic}}.';
-    const outroTpl = (req.outroScript || settings.brand?.outroScript || '').trim() || 'Follow for more quizzes. Like and subscribe.';
+    const { introTemplate, outroTemplate } = resolveIntroOutroScripts(
+      lang,
+      req.introScript,
+      req.outroScript,
+      settings.brand?.introScript,
+      settings.brand?.outroScript
+    );
     const cta = (req.ctaLine || settings.brand?.ctaLine || '').trim();
-    const introSpeech = introTpl.replace(/\{\{\s*topic\s*\}\}/gi, topicSafe);
-    const outroSpeech = (cta ? `${outroTpl} ${cta}` : outroTpl).replace(/\{\{\s*topic\s*\}\}/gi, topicSafe);
+    const introSpeech = introTemplate.replace(/\{\{\s*topic\s*\}\}/gi, topicSafe);
+    const outroSpeech = (cta ? `${outroTemplate} ${cta}` : outroTemplate).replace(/\{\{\s*topic\s*\}\}/gi, topicSafe);
+    const fontForSlides = resolveFontFileForLanguage(lang, fontFallback);
+    const introTheme = mergeVideoTheme(req.theme as VideoTheme | undefined, req.introTheme as VideoTheme | undefined);
+    const outroTheme = mergeVideoTheme(req.theme as VideoTheme | undefined, req.outroTheme as VideoTheme | undefined);
 
     let introVoiceFile = './assets/audio/intro_voice.mp3';
     let outroVoiceFile = './assets/audio/outro_voice.mp3';
@@ -209,19 +224,24 @@ export async function runVideoJob(videoId: string): Promise<void> {
     await setProgress(videoId, 'intro', 'Rendering intro');
     await appendJobEvent(videoId, 'intro', 'Rendering intro');
     await renderIntroSlide(introFile, req.topic || 'Quiz', {
-      width: 1080, height: 1920, fps: 30, fontFile,
+      width: 1080, height: 1920, fps: 30, fontFile: fontForSlides,
       voiceFile: introVoiceFile,
       bgmFile: './assets/audio/bgm.mp3',
       dingFile: './assets/audio/ding.mp3',
+      subtitle: ui.introSubtitle,
+      theme: introTheme,
     });
     if (!(await videoRowExists(videoId))) return;
     if (await isCancelRequested(videoId)) throw new Error('Cancelled');
     await setProgress(videoId, 'outro', 'Rendering outro');
     await appendJobEvent(videoId, 'outro', 'Rendering outro');
     await renderOutroSlide(outroFile, {
-      width: 1080, height: 1920, fps: 30, fontFile,
+      width: 1080, height: 1920, fps: 30, fontFile: fontForSlides,
       voiceFile: outroVoiceFile,
       bgmFile: './assets/audio/bgm.mp3',
+      line1Text: ui.outroLine1,
+      line2Text: ui.outroLine2,
+      theme: outroTheme,
     });
     if (!(await videoRowExists(videoId))) return;
     if (await isCancelRequested(videoId)) throw new Error('Cancelled');
@@ -230,7 +250,7 @@ export async function runVideoJob(videoId: string): Promise<void> {
     await appendJobEvent(videoId, 'voice', 'Voice generation started');
 
     await renderVideo(quizzes, {
-      fontFile,
+      fontFile: fontFallback,
       tempDir,
       outputDir: userVideoDir,
       cacheDir: path.join(env.CACHE_DIR, userId),

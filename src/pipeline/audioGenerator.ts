@@ -10,6 +10,7 @@ import { sanitizeForTTS, generateCountdownText } from '../utils/textSanitizer.js
 import path from 'path';
 import fs from 'fs/promises';
 import { retryWithBackoff } from '../utils/retry.js';
+import { getQuizUiStrings } from '../utils/quizUiStrings.js';
 
 /**
  * Build cumulative concats with the same encoder as the full voice track, then
@@ -81,14 +82,16 @@ export async function generateSegmentAudio(
   await fs.mkdir(tempDir, { recursive: true });
   
   try {
+    const voice = config.ttsVoice;
     // Generate TTS for each component
     const questionText = sanitizeForTTS(quiz.question);
     const countdownText = generateCountdownText(quiz.language);
+    const ui = getQuizUiStrings(quiz.language);
     
     // Generate question audio
     const questionFile = path.join(tempDir, 'question.mp3');
     await retryWithBackoff(
-      () => ttsService.generate(questionText, quiz.language || 'en'),
+      () => ttsService.generate(questionText, quiz.language || 'en', voice),
       3,
       [1000, 2000, 4000]
     ).then(file => fs.copyFile(file, questionFile));
@@ -99,7 +102,7 @@ export async function generateSegmentAudio(
       const optionText = sanitizeForTTS(quiz.options[i]);
       const optionFile = path.join(tempDir, `option_${i}.mp3`);
       await retryWithBackoff(
-        () => ttsService.generate(optionText, quiz.language || 'en'),
+        () => ttsService.generate(optionText, quiz.language || 'en', voice),
         3,
         [1000, 2000, 4000]
       ).then(file => fs.copyFile(file, optionFile));
@@ -109,17 +112,17 @@ export async function generateSegmentAudio(
     // Generate countdown audio
     const countdownFile = path.join(tempDir, 'countdown.mp3');
     await retryWithBackoff(
-      () => ttsService.generate(countdownText, quiz.language || 'en'),
+      () => ttsService.generate(countdownText, quiz.language || 'en', voice),
       3,
       [1000, 2000, 4000]
     ).then(file => fs.copyFile(file, countdownFile));
     
     // Generate answer reveal audio
     const correctAnswer = quiz.options[quiz.answerIndex];
-    const answerText = sanitizeForTTS(`The correct answer is: ${correctAnswer}`);
+    const answerText = sanitizeForTTS(`${ui.correctAnswerPrefix} ${correctAnswer}`);
     const answerFile = path.join(tempDir, 'answer.mp3');
     await retryWithBackoff(
-      () => ttsService.generate(answerText, quiz.language || 'en'),
+      () => ttsService.generate(answerText, quiz.language || 'en', voice),
       3,
       [1000, 2000, 4000]
     ).then(file => fs.copyFile(file, answerFile));

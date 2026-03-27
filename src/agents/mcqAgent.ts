@@ -1,6 +1,8 @@
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
+import { quizLanguageDisplayName } from "../utils/quizLanguages.js";
+import { DEFAULT_MCQ_GUIDELINES } from "../constants/mcqGuidelinesDefault.js";
 
 export interface MCQ {
   question: string;
@@ -91,23 +93,52 @@ export interface MCQGenerationOptions {
   tone?: "neutral" | "professional" | "friendly" | "exam" | "witty";
   audience?: string;
   customInstructions?: string;
+  /** Replaces the default Guidelines: bullet list when non-empty (topic mode). */
+  guidelines?: string;
   /** Chat model id (e.g. gpt-4o-mini, gpt-4o) */
   model?: string;
 }
 
+/**
+ * Randomize which slot (0–3) holds the correct answer without changing option text.
+ * Fixes models that always emit answerIndex: 0.
+ */
+export function shuffleMcqAnswerPositions(mcq: MCQ): MCQ {
+  if (!Array.isArray(mcq.options) || mcq.options.length !== 4) return mcq;
+  let ai = Math.floor(Number(mcq.answerIndex));
+  if (Number.isNaN(ai) || ai < 0 || ai > 3) ai = 0;
+  const entries = mcq.options.map((text, i) => ({ text, wasCorrect: i === ai }));
+  for (let i = entries.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [entries[i], entries[j]] = [entries[j], entries[i]];
+  }
+  const newIdx = entries.findIndex((e) => e.wasCorrect);
+  return {
+    ...mcq,
+    options: entries.map((e) => e.text),
+    answerIndex: newIdx >= 0 ? newIdx : 0,
+  };
+}
+
 function buildMcqPrompt(topic: string, count: number, opt: MCQGenerationOptions): string {
-  const lang = opt.language?.trim() || "English";
+  const lang = quizLanguageDisplayName(opt.language?.trim());
   const diff = opt.difficulty || "intermediate";
   const tone = opt.tone || "neutral";
   const audience = opt.audience?.trim() || "general learners watching short-form video";
   const extra = opt.customInstructions?.trim();
+  const guidelinesBody = (opt.guidelines?.trim() || DEFAULT_MCQ_GUIDELINES).trim();
 
   const extraBlock = extra
     ? `\nAdditional instructions from the creator:\n${extra}\n`
     : "";
 
   return `
-Generate ${count} high-quality multiple choice quiz questions on the topic "${topic}".
+Generate ${count} high-quality multiple choice quiz questions.
+
+Authoritative topic focus (every question must test this subject only — do not drift to unrelated themes):
+---
+${topic}
+---
 
 Context:
 - Output language for questions and options: ${lang}
@@ -116,23 +147,18 @@ Context:
 - Target audience: ${audience}
 ${extraBlock}
 Guidelines:
-- Questions should test understanding, not definitions only
-- Each option must be descriptive and meaningful (not single words)
-- Only ONE option should be clearly correct
-- Incorrect options should be realistic and conceptually relevant
-- Avoid trick questions or ambiguous wording
-- Suitable for short vertical learning videos
-- Do NOT repeat questions
-- Do NOT mention option labels like A, B, C, D inside option text
+${guidelinesBody}
 
 Rules:
+- Each question must be clearly answerable from general knowledge about the topic focus above; vary sub-angles (facts, application, common mistakes) but stay within scope.
 - Return ONLY valid JSON
 - No markdown
 - No explanation
 - No backticks
 - No trailing commas
+- For each question, "answerIndex" must be 0, 1, 2, or 3 indicating which option is correct — vary the position across questions (do not default every question to 0)
 
-JSON Format:
+JSON Format (answerIndex shows which of the four options is correct; use different values across questions):
 [
   {
     "question": "Clear, concise question text",
@@ -142,7 +168,7 @@ JSON Format:
       "Descriptive option text explaining a concept or outcome",
       "Descriptive option text explaining a concept or outcome"
     ],
-    "answerIndex": 0
+    "answerIndex": 2
   }
 ]
 `;
@@ -197,7 +223,8 @@ export async function generateMCQs(
   const mcqs: MCQ[] = JSON.parse(jsonString);
 
   validateMCQs(mcqs);
-  console.log(`✅ Generated and validated ${mcqs.length} MCQs`);
+  const shuffled = mcqs.map(shuffleMcqAnswerPositions);
+  console.log(`✅ Generated and validated ${shuffled.length} MCQs (correct options randomized)`);
 
-  return mcqs;
+  return shuffled;
 }

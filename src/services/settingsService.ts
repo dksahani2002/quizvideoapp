@@ -1,5 +1,6 @@
 import { UserSettings } from '../db/models/UserSettings.js';
 import { decryptJson, encryptJson } from './cryptoService.js';
+import { BRAND_DEFAULTS_EN } from '../utils/quizUiStrings.js';
 
 export interface AppSettings {
   openai: {
@@ -61,8 +62,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   youtube: { clientId: '', clientSecret: '', redirectUri: '', refreshToken: '' },
   instagramGraph: { pageId: '', igUserId: '', accessToken: '', tokenExpiresAt: '' },
   brand: {
-    introScript: 'Can you answer this? This quiz is about {{topic}}.',
-    outroScript: 'Follow for more quizzes. Like and subscribe.',
+    introScript: BRAND_DEFAULTS_EN.introTemplate,
+    outroScript: BRAND_DEFAULTS_EN.outroTemplate,
     ctaLine: '',
     watermarkImage: '',
     watermarkOpacity: 0.75,

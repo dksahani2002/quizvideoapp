@@ -73,6 +73,12 @@ export function ManualQuizForm({ quizzes, onChange }: Props) {
 
   return (
     <div className="space-y-4 mb-6">
+      <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-4 py-3 text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">
+        <p className="font-medium text-[hsl(var(--foreground))] mb-1">Correct answer</p>
+        <p>
+          By default the correct option is <strong>A</strong>. Click the radio next to B, C, or D to mark a different option as correct before you generate the video.
+        </p>
+      </div>
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Questions ({quizzes.length})</h2>
         <button
@@ -125,7 +131,9 @@ export function ManualQuizForm({ quizzes, onChange }: Props) {
               </div>
             ))}
           </div>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">Select the radio button next to the correct answer</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            Select the radio next to the correct option (defaults to A if unchanged).
+          </p>
         </div>
       ))}
 

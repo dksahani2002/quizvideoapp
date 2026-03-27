@@ -145,8 +145,18 @@ export async function uploadToYouTube(
       videoId: res.data.id || undefined,
       url: res.data.id ? `https://youtube.com/watch?v=${res.data.id}` : undefined,
     };
-  } catch (error: any) {
-    const errorMessage = error.message || String(error);
+  } catch (error: unknown) {
+    const err = error as {
+      message?: string;
+      response?: { data?: { error?: { message?: string; errors?: Array<{ message?: string }> } } };
+    };
+    const dataErr = err?.response?.data?.error;
+    const apiMsg =
+      (typeof dataErr?.message === "string" && dataErr.message.trim()) ||
+      (Array.isArray(dataErr?.errors) && typeof dataErr.errors[0]?.message === "string"
+        ? dataErr.errors[0].message
+        : "");
+    const errorMessage = apiMsg || err?.message || String(error);
     console.error("❌ Error uploading to YouTube:", errorMessage);
     return {
       success: false,

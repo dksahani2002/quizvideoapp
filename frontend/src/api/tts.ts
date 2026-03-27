@@ -1,13 +1,14 @@
 import type { GenerateRequest } from '../types';
+import { apiUrl } from '../lib/apiOrigin';
 
 export type TtsPreviewParams = Pick<
   GenerateRequest,
-  'ttsProvider' | 'ttsVoice' | 'ttsModel' | 'systemVoice' | 'elevenlabsModelId'
+  'ttsProvider' | 'ttsVoice' | 'ttsModel' | 'systemVoice' | 'elevenlabsModelId' | 'language'
 > & { text?: string };
 
 export async function previewTts(params: TtsPreviewParams): Promise<Blob> {
   const token = localStorage.getItem('token');
-  const res = await fetch('/api/tts/preview', {
+  const res = await fetch(apiUrl('/api/tts/preview'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

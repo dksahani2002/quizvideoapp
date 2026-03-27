@@ -9,6 +9,51 @@ import {
 } from "../controllers/uploadController.js";
 import { EnvConfig } from "../config/envConfig.js";
 
+function classifyYouTubeFailure(errors: string[], youtubeErr?: string): { status: number; hint?: string } {
+  const msg = [...(errors || []), youtubeErr || ""].join("\n").toLowerCase();
+
+  if (
+    msg.includes("not configured") ||
+    msg.includes("add credentials") ||
+    msg.includes("connect youtube")
+  ) {
+    return {
+      status: 400,
+      hint: "Open Settings → YouTube API credentials, then Publishing → connect YouTube.",
+    };
+  }
+
+  if (msg.includes("no video file found") || msg.includes("video file not found")) {
+    return { status: 404, hint: "Generate a completed video first, or check that the file exists on the server." };
+  }
+
+  if (
+    msg.includes("invalid_grant") ||
+    msg.includes("invalid credentials") ||
+    msg.includes("token has been expired") ||
+    msg.includes("token has been revoked")
+  ) {
+    return {
+      status: 401,
+      hint: "Reconnect YouTube in Publishing (OAuth refresh token may be invalid).",
+    };
+  }
+
+  if (msg.includes("quota") || msg.includes("rate limit") || msg.includes("exceeded")) {
+    return { status: 429, hint: "YouTube API quota or rate limit — try again later." };
+  }
+
+  if (msg.includes("access denied") || msg.includes("forbidden") || msg.includes("insufficient")) {
+    return { status: 403 };
+  }
+
+  if (msg.includes("enotfound") || msg.includes("econnrefused") || msg.includes("network")) {
+    return { status: 503, hint: "Network error talking to Google. Check connectivity and DNS." };
+  }
+
+  return { status: 502, hint: "YouTube API rejected the upload. See the error message and server logs." };
+}
+
 function classifyInstagramFailure(errors: string[]): { status: number; hint?: string } {
   const msg = (errors || []).join("\n");
   const m = msg.toLowerCase();
@@ -71,15 +116,21 @@ export function createUploadRoutes(envConfig: EnvConfig): Router {
 
       if (response.success) {
         return res.status(200).json(response);
-      } else {
-        return res.status(500).json(response);
       }
+      const ytErr = response.platforms?.youtube?.error;
+      const { status, hint } = classifyYouTubeFailure(response.errors || [], ytErr);
+      const error =
+        (response.errors && response.errors[0]) || ytErr || "Upload failed";
+      return res.status(status).json({ ...response, error, hint });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      return res.status(500).json({
+      const { status, hint } = classifyYouTubeFailure([errorMessage]);
+      return res.status(status).json({
         success: false,
         platforms: {},
         errors: [errorMessage],
+        error: errorMessage,
+        hint,
       });
     }
   });
@@ -107,15 +158,23 @@ export function createUploadRoutes(envConfig: EnvConfig): Router {
 
       if (response.success) {
         return res.status(200).json(response);
-      } else {
-        return res.status(500).json(response);
       }
+      const ytErr = response.platforms?.youtube?.error;
+      const { status, hint } = classifyYouTubeFailure(response.errors || [], ytErr);
+      const error =
+        (response.errors && response.errors[0]) ||
+        ytErr ||
+        "YouTube upload failed";
+      return res.status(status).json({ ...response, error, hint });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      return res.status(500).json({
+      const { status, hint } = classifyYouTubeFailure([errorMessage]);
+      return res.status(status).json({
         success: false,
         platforms: {},
         errors: [errorMessage],
+        error: errorMessage,
+        hint,
       });
     }
   });

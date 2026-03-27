@@ -46,6 +46,14 @@ export interface SegmentMetadata {
   updatedAt: number;
 }
 
+/** Gradient + optional background image (quiz segments; base for intro/outro when not overridden). */
+export interface VideoTheme {
+  preset?: string;
+  customStops?: Array<{ pos: number; color: string }>;
+  backgroundImage?: string;
+  backgroundOpacity?: number;
+}
+
 export interface RenderConfig {
   // Video specs
   width: number;        // 1080
@@ -98,12 +106,7 @@ export interface RenderConfig {
   bgmVolume?: number; // 0-1, default 0.12
 
   // Theme customization
-  theme?: {
-    preset?: string;
-    customStops?: Array<{ pos: number; color: string }>;
-    backgroundImage?: string;
-    backgroundOpacity?: number;
-  };
+  theme?: VideoTheme;
   textAlign?: 'left' | 'center' | 'right';
 
   /** Multiplier for base font sizes (0.75–1.25). Higher = larger text, tighter fit risk. */

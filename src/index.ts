@@ -1,4 +1,6 @@
 import "dotenv/config";
+import fs from "node:fs";
+import path from "node:path";
 import mongoose from "mongoose";
 
 import { loadEnvConfig, assertProductionConfig } from "./config/envConfig.js";
@@ -18,6 +20,14 @@ async function startServer() {
   const port = env.PORT || 3000;
   const server = app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
+    if (
+      env.NODE_ENV === "development" &&
+      fs.existsSync(path.resolve("./frontend/dist"))
+    ) {
+      console.log(
+        "[dev] UI is served from ./frontend/dist — after changing frontend/src, run: npm run build --prefix frontend (or use Vite: npm run dev --prefix frontend on port 5173)"
+      );
+    }
   });
 
   const shutdown = (signal: string) => {

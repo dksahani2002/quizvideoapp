@@ -20,8 +20,15 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed: ${res.status}`);
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      errors?: string[];
+      hint?: string;
+    };
+    const fromList = Array.isArray(body.errors) && body.errors.length ? body.errors[0] : '';
+    const msg = body.error || fromList || `Request failed: ${res.status}`;
+    const hint = typeof body.hint === 'string' && body.hint.trim() ? `\n${body.hint}` : '';
+    throw new Error(`${msg}${hint}`);
   }
   return res.json();
 }

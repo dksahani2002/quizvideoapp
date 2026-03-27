@@ -79,8 +79,30 @@ export function createAuthRoutes(): Router {
     }
   });
 
-  router.get('/me', authMiddleware, (req: Request, res: Response) => {
-    res.json({ success: true, data: req.user });
+  router.get('/me', authMiddleware, async (req: Request, res: Response) => {
+    try {
+      const id = req.user!.id;
+      const doc = await User.findById(id).select('name email role').lean();
+      if (!doc) {
+        res.status(401).json({ success: false, error: 'User not found' });
+        return;
+      }
+      const role = (doc.role as 'user' | 'admin') || 'user';
+      const data = {
+        id,
+        email: doc.email,
+        name: doc.name,
+        role,
+      };
+      const jwtRole = req.user!.role || 'user';
+      const payload: { success: boolean; data: typeof data; token?: string } = { success: true, data };
+      if (role !== jwtRole) {
+        payload.token = signToken({ id, email: doc.email, name: doc.name, role });
+      }
+      res.json(payload);
+    } catch (error) {
+      res.status(500).json({ success: false, error: String(error) });
+    }
   });
 
   return router;

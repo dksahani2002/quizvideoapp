@@ -2,6 +2,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import type { VideoItem, GenerateRequest } from '../types';
 
+export interface PreviewTopicRequest {
+  topic: string;
+  language: string;
+  translateTopic: boolean;
+  enhanceTopic: boolean;
+  openaiModel?: string;
+}
+
+export interface PreviewTopicResult {
+  localizedLabel: string;
+  promptSubject: string;
+}
+
+export function previewTopic(req: PreviewTopicRequest) {
+  return api.post<{ success: boolean; data: PreviewTopicResult }>('/api/videos/preview-topic', req);
+}
+
 export function useVideos() {
   return useQuery({
     queryKey: ['videos'],

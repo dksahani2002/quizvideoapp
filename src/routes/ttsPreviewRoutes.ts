@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import { loadEnvConfig } from "../config/envConfig.js";
 import { loadSettings } from "../services/settingsService.js";
 import { createTTSService } from "../services/ttsService.js";
+import { normalizeQuizLanguage } from "../utils/quizLanguages.js";
 
 const PREVIEW_MAX_CHARS = 500;
 
@@ -25,6 +26,7 @@ export function createTtsPreviewRoutes() {
         ttsModel,
         systemVoice,
         elevenlabsModelId,
+        language: rawLang,
       } = req.body;
 
       const sample =
@@ -82,7 +84,8 @@ export function createTtsPreviewRoutes() {
         elevenlabsModelId: elModel,
       });
 
-      const audioPath = await ttsService.generate(sample, "en", voice);
+      const previewLang = normalizeQuizLanguage(rawLang);
+      const audioPath = await ttsService.generate(sample, previewLang, voice);
       const buf = await fs.readFile(audioPath);
 
       res.setHeader("Content-Type", "audio/mpeg");

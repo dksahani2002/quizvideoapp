@@ -8,8 +8,37 @@ import { promisify } from 'util';
 import { wrapText } from './textSanitizer.js';
 import path from 'path';
 import fs from 'fs/promises';
+import { existsSync } from 'fs';
 
 const execAsync = promisify(exec);
+
+/**
+ * Composite the gradient stack over a still image (sync-safe: caller passes
+ * `-loop 1 -framerate fps -t duration -i image` so the image stream matches `duration`).
+ */
+function buildThemeBackgroundOverlayFilters(
+  gradOutputLabel: string,
+  width: number,
+  height: number,
+  backgroundImage: string | undefined,
+  backgroundOpacity: number | undefined
+): { extraFilters: string[]; baseLayer: string; needsImageInput: boolean; bgPath?: string } {
+  const bgPath = backgroundImage?.trim();
+  if (!bgPath || !existsSync(bgPath)) {
+    return { extraFilters: [], baseLayer: gradOutputLabel, needsImageInput: false };
+  }
+  const op = Math.min(1, Math.max(0.05, backgroundOpacity ?? 0.55));
+  return {
+    extraFilters: [
+      `[${gradOutputLabel}]format=rgba,colorchannelmixer=aa=${op}[grad_rgba]`,
+      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1[bgimg]`,
+      `[bgimg][grad_rgba]overlay=0:0[bg_layer]`,
+    ],
+    baseLayer: 'bg_layer',
+    needsImageInput: true,
+    bgPath,
+  };
+}
 
 /**
  * FFmpeg -filter_complex treats commas as filter-chain separators.
@@ -469,6 +498,8 @@ export async function renderSilentVideo(
     textAlign?: 'left' | 'center' | 'right';
     layoutDensity?: number;
     headerTitle?: string;
+    /** Localized "Correct!" badge (quiz language). */
+    correctBadgeText?: string;
   }
 ): Promise<void> {
   const { question, options, answerIndex, timing } = textConfig;
@@ -504,11 +535,21 @@ export async function renderSilentVideo(
     customColorStops: themeStops,
   });
   const filters: string[] = [...grad.filters];
+  const bgOverlay = buildThemeBackgroundOverlayFilters(
+    grad.outputLabel,
+    width,
+    height,
+    config.theme?.backgroundImage,
+    config.theme?.backgroundOpacity
+  );
+  filters.push(...bgOverlay.extraFilters);
+  const baseLayer = bgOverlay.baseLayer;
+  const correctBadge = config.correctBadgeText ?? 'Correct!';
 
   // ── Header bar (always visible) ──
   const headerBarY = headerY - 10;
   filters.push(
-    `[${grad.outputLabel}]drawbox=x=0:y=${headerBarY}:w=${width}:h=${headerHeight}:` +
+    `[${baseLayer}]drawbox=x=0:y=${headerBarY}:w=${width}:h=${headerHeight}:` +
     `color=0x00BFFF@0.15:t=fill[hdr_bg]`
   );
   filters.push(
@@ -704,18 +745,23 @@ export async function renderSilentVideo(
     });
   }
 
-  // "Correct!" badge at the bottom instead of the old distant answer label
+  // Answer-reveal badge at the bottom (localized)
   filters.push(
-    `[${layer}]drawtext=fontfile='${fontFile}':text='${escapeDrawtext('Correct!')}':` +
+    `[${layer}]drawtext=fontfile='${fontFile}':text='${escapeDrawtext(correctBadge)}':` +
     `fontsize=56:fontcolor=0x27AE60:x=(w-text_w)/2:y=${countdownY}:` +
     `enable='${escapeCommasInFilterExpr(`between(t,${arStart},${arEnd})`)}'[final]`
   );
 
   // ── Encode ──
   const filterComplex = filters.join(';');
+  const safeBg = bgOverlay.bgPath ? bgOverlay.bgPath.replace(/"/g, '\\"') : '';
+  const videoInput =
+    bgOverlay.needsImageInput && safeBg
+      ? `-loop 1 -framerate ${fps} -t ${duration} -i "${safeBg}"`
+      : `-f lavfi -i color=c=${bgColor}:s=${width}x${height}:d=${duration}`;
   const command = [
     'ffmpeg',
-    `-f lavfi -i color=c=${bgColor}:s=${width}x${height}:d=${duration}`,
+    videoInput,
     `-filter_complex "${filterComplex}"`,
     `-map "[final]"`,
     `-r ${fps}`,
@@ -759,6 +805,12 @@ async function renderSilentVideoSimple(
     safeMargin: { top: number; bottom: number; left: number; right: number };
     layoutDensity?: number;
     headerTitle?: string;
+    theme?: {
+      customStops?: Array<{ pos: number; color: string }>;
+      backgroundImage?: string;
+      backgroundOpacity?: number;
+    };
+    correctBadgeText?: string;
   }
 ): Promise<void> {
   const { question, options, answerIndex, timing } = textConfig;
@@ -779,20 +831,35 @@ async function renderSilentVideoSimple(
 
   const escapedQuestionLines = questionLines.map(l => escapeDrawtext(l));
   const labelWidth = Math.round(oFontSize * 0.52 * 3) + 10;
-  const bgColor = '0x0B0A1A';
+  const themeStops = config.theme?.customStops;
+  const bgColor =
+    themeStops && themeStops.length >= 2
+      ? `0x${themeStops[0].color.replace(/^#/, '')}`
+      : '0x0B0A1A';
+  const correctBadge = config.correctBadgeText ?? 'Correct!';
 
   // ── Smooth gradient background ──
   const grad = buildGradientFilters(width, height, duration, {
     accentLineY: headerY + headerHeight + 4,
     glowCenterY: questionYStart + Math.round(questionLines.length * qLineH / 2),
     glowHeight: Math.round(questionLines.length * qLineH + 120),
+    customColorStops: themeStops,
   });
   const filters: string[] = [...grad.filters];
+  const bgOverlay = buildThemeBackgroundOverlayFilters(
+    grad.outputLabel,
+    width,
+    height,
+    config.theme?.backgroundImage,
+    config.theme?.backgroundOpacity
+  );
+  filters.push(...bgOverlay.extraFilters);
+  const baseLayer = bgOverlay.baseLayer;
 
   // ── Header bar ──
   const headerBarY = headerY - 10;
   filters.push(
-    `[${grad.outputLabel}]drawbox=x=0:y=${headerBarY}:w=${width}:h=${headerHeight}:` +
+    `[${baseLayer}]drawbox=x=0:y=${headerBarY}:w=${width}:h=${headerHeight}:` +
     `color=0x00BFFF@0.15:t=fill[hdr_bg]`
   );
   filters.push(
@@ -980,17 +1047,22 @@ async function renderSilentVideoSimple(
     });
   }
 
-  // "Correct!" badge
+  // Answer-reveal badge
   filters.push(
-    `[${layer}]drawtext=fontfile='${fontFile}':text='${escapeDrawtext('Correct!')}':` +
+    `[${layer}]drawtext=fontfile='${fontFile}':text='${escapeDrawtext(correctBadge)}':` +
     `fontsize=56:fontcolor=0x27AE60:x=(w-text_w)/2:y=${countdownY}:` +
     `enable='${escapeCommasInFilterExpr(`between(t,${arStart},${arEnd})`)}'[final]`
   );
 
   const filterComplex = filters.join(';');
+  const safeBg = bgOverlay.bgPath ? bgOverlay.bgPath.replace(/"/g, '\\"') : '';
+  const videoInput =
+    bgOverlay.needsImageInput && safeBg
+      ? `-loop 1 -framerate ${fps} -t ${duration} -i "${safeBg}"`
+      : `-f lavfi -i color=c=${bgColor}:s=${width}x${height}:d=${duration}`;
   const command = [
     'ffmpeg',
-    `-f lavfi -i color=c=${bgColor}:s=${width}x${height}:d=${duration}`,
+    videoInput,
     `-filter_complex "${filterComplex}"`,
     `-map "[final]"`,
     `-r ${fps}`,
@@ -1099,6 +1171,13 @@ export async function renderIntroSlide(
     voiceFile?: string;
     bgmFile?: string;
     dingFile?: string;
+    /** Localized line under topic */
+    subtitle?: string;
+    theme?: {
+      customStops?: Array<{ pos: number; color: string }>;
+      backgroundImage?: string;
+      backgroundOpacity?: number;
+    };
   }
 ): Promise<void> {
   const { width, height, fps, fontFile } = config;
@@ -1110,26 +1189,45 @@ export async function renderIntroSlide(
     dur = Math.max(2.5, voiceDur + 1.0);
   }
 
-  const bgColor = '0x0B0A1A';
+  const themeStops = config.theme?.customStops;
+  const bgColor =
+    themeStops && themeStops.length >= 2
+      ? `0x${themeStops[0].color.replace(/^#/, '')}`
+      : '0x0B0A1A';
   const escapedTopic = escapeDrawtext(topic);
-  const subtitle = escapeDrawtext('Can you answer this?');
+  const subtitle = escapeDrawtext(config.subtitle?.trim() || 'Can you answer this?');
 
   const grad = buildGradientFilters(width, height, dur, {
     showAccent: false,
     glowCenterY: Math.round(height * 0.5),
     glowHeight: Math.round(height * 0.25),
+    customColorStops: themeStops,
   });
-  const filters = [
-    ...grad.filters,
-    `[${grad.outputLabel}]drawtext=fontfile='${fontFile}':text='${escapedTopic}':fontsize=52:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-60[t1]`,
-    `[t1]drawtext=fontfile='${fontFile}':text='${subtitle}':fontsize=36:fontcolor=0x00BFFF:x=(w-text_w)/2:y=(h-text_h)/2+40[final]`,
-  ];
+  const filterParts: string[] = [...grad.filters];
+  const bgOverlay = buildThemeBackgroundOverlayFilters(
+    grad.outputLabel,
+    width,
+    height,
+    config.theme?.backgroundImage,
+    config.theme?.backgroundOpacity
+  );
+  filterParts.push(...bgOverlay.extraFilters);
+  const baseLayer = bgOverlay.baseLayer;
+  filterParts.push(
+    `[${baseLayer}]drawtext=fontfile='${fontFile}':text='${escapedTopic}':fontsize=52:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-60[t1]`,
+    `[t1]drawtext=fontfile='${fontFile}':text='${subtitle}':fontsize=36:fontcolor=0x00BFFF:x=(w-text_w)/2:y=(h-text_h)/2+40[final]`
+  );
 
   const silentVideo = outputFile.replace(/\.mp4$/, '_silent.mp4');
+  const safeBg = bgOverlay.bgPath ? bgOverlay.bgPath.replace(/"/g, '\\"') : '';
+  const videoInput =
+    bgOverlay.needsImageInput && safeBg
+      ? `-loop 1 -framerate ${fps} -t ${dur} -i "${safeBg}"`
+      : `-f lavfi -i color=c=${bgColor}:s=${width}x${height}:d=${dur}`;
   const videoCmd = [
     'ffmpeg',
-    `-f lavfi -i color=c=${bgColor}:s=${width}x${height}:d=${dur}`,
-    `-filter_complex "${filters.join(';')}"`,
+    videoInput,
+    `-filter_complex "${filterParts.join(';')}"`,
     `-map "[final]"`,
     `-r ${fps}`,
     '-c:v libx264 -profile:v baseline -preset medium -pix_fmt yuv420p',
@@ -1202,6 +1300,13 @@ export async function renderOutroSlide(
     fontFile: string;
     voiceFile?: string;
     bgmFile?: string;
+    line1Text?: string;
+    line2Text?: string;
+    theme?: {
+      customStops?: Array<{ pos: number; color: string }>;
+      backgroundImage?: string;
+      backgroundOpacity?: number;
+    };
   }
 ): Promise<void> {
   const { width, height, fps, fontFile } = config;
@@ -1212,26 +1317,45 @@ export async function renderOutroSlide(
     dur = Math.max(2.5, voiceDur + 1.0);
   }
 
-  const bgColor = '0x0B0A1A';
-  const line1 = escapeDrawtext('Follow for more quizzes!');
-  const line2 = escapeDrawtext('Like & Subscribe');
+  const themeStops = config.theme?.customStops;
+  const bgColor =
+    themeStops && themeStops.length >= 2
+      ? `0x${themeStops[0].color.replace(/^#/, '')}`
+      : '0x0B0A1A';
+  const line1 = escapeDrawtext(config.line1Text?.trim() || 'Follow for more quizzes!');
+  const line2 = escapeDrawtext(config.line2Text?.trim() || 'Like & Subscribe');
 
   const grad = buildGradientFilters(width, height, dur, {
     showAccent: false,
     glowCenterY: Math.round(height * 0.5),
     glowHeight: Math.round(height * 0.25),
+    customColorStops: themeStops,
   });
-  const filters = [
-    ...grad.filters,
-    `[${grad.outputLabel}]drawtext=fontfile='${fontFile}':text='${line1}':fontsize=48:fontcolor=0xFFD700:x=(w-text_w)/2:y=(h-text_h)/2-40[t1]`,
-    `[t1]drawtext=fontfile='${fontFile}':text='${line2}':fontsize=34:fontcolor=0x00BFFF:x=(w-text_w)/2:y=(h-text_h)/2+40[final]`,
-  ];
+  const filterParts: string[] = [...grad.filters];
+  const bgOverlay = buildThemeBackgroundOverlayFilters(
+    grad.outputLabel,
+    width,
+    height,
+    config.theme?.backgroundImage,
+    config.theme?.backgroundOpacity
+  );
+  filterParts.push(...bgOverlay.extraFilters);
+  const baseLayer = bgOverlay.baseLayer;
+  filterParts.push(
+    `[${baseLayer}]drawtext=fontfile='${fontFile}':text='${line1}':fontsize=48:fontcolor=0xFFD700:x=(w-text_w)/2:y=(h-text_h)/2-40[t1]`,
+    `[t1]drawtext=fontfile='${fontFile}':text='${line2}':fontsize=34:fontcolor=0x00BFFF:x=(w-text_w)/2:y=(h-text_h)/2+40[final]`
+  );
 
   const silentVideo = outputFile.replace(/\.mp4$/, '_silent.mp4');
+  const safeBg = bgOverlay.bgPath ? bgOverlay.bgPath.replace(/"/g, '\\"') : '';
+  const videoInput =
+    bgOverlay.needsImageInput && safeBg
+      ? `-loop 1 -framerate ${fps} -t ${dur} -i "${safeBg}"`
+      : `-f lavfi -i color=c=${bgColor}:s=${width}x${height}:d=${dur}`;
   const videoCmd = [
     'ffmpeg',
-    `-f lavfi -i color=c=${bgColor}:s=${width}x${height}:d=${dur}`,
-    `-filter_complex "${filters.join(';')}"`,
+    videoInput,
+    `-filter_complex "${filterParts.join(';')}"`,
     `-map "[final]"`,
     `-r ${fps}`,
     '-c:v libx264 -profile:v baseline -preset medium -pix_fmt yuv420p',

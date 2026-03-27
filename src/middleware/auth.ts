@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { loadEnvConfig } from '../config/envConfig.js';
+import { User } from '../db/models/User.js';
 
 export interface AuthUser {
   id: string;
@@ -35,11 +36,22 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 }
 
+/** Use DB role so promoting/demoting users takes effect without waiting for token expiry. */
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  const role = req.user?.role || 'user';
-  if (role !== 'admin') {
-    res.status(403).json({ success: false, error: 'Admin access required' });
+  const id = req.user?.id;
+  if (!id) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
     return;
   }
-  next();
+  User.findById(id)
+    .select('role')
+    .lean()
+    .then((user) => {
+      if (!user || user.role !== 'admin') {
+        res.status(403).json({ success: false, error: 'Admin access required' });
+        return;
+      }
+      next();
+    })
+    .catch((e) => res.status(500).json({ success: false, error: String(e) }));
 }

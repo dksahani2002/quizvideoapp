@@ -108,8 +108,21 @@ export function createApp(env: EnvConfig): express.Application {
 
   const frontendDist = path.resolve('./frontend/dist');
   if (fs.existsSync(frontendDist)) {
-    app.use(express.static(frontendDist));
+    const devUi = env.NODE_ENV === 'development';
+    app.use(
+      express.static(frontendDist, {
+        maxAge: devUi ? 0 : undefined,
+        setHeaders(res) {
+          if (devUi) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          }
+        },
+      })
+    );
     app.get('*', (_req, res) => {
+      if (devUi) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      }
       res.sendFile(path.join(frontendDist, 'index.html'));
     });
   }
