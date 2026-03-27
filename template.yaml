@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: mcq-shorts-agent — HTTP API + video worker (same container image, different command)
+
+Parameters:
+  ContainerImageUri:
+    Type: String
+    Description: Full ECR image URI (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/mcq-shorts-agent:latest)
+  MongoUri:
+    Type: String
+    NoEcho: true
+    Description: MongoDB connection string (e.g. MongoDB Atlas)
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: Random string (32+ chars) for JWT signing
+  CorsOrigin:
+    Type: String
+    Default: '*'
+    Description: Comma-separated origins for CORS (use your site URL in production)
+  OpenAiApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Optional default OpenAI key (users can still set keys in-app)
+
+Globals:
+  Function:
+    Architectures:
+      - x86_64
+
+Resources:
+  OutputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedOrigins:
+              - '*'
+            ExposeHeaders:
+              - Accept-Ranges
+              - Content-Range
+              - Content-Length
+              - Content-Type
+              - ETag
+            MaxAge: 3600
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowOrigins:
+          - !Ref CorsOrigin
+
+  VideoWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageUri: !Ref ContainerImageUri
+      ImageConfig:
+        Command:
+          - dist/lambda/videoWorkerHandler.handler
+      Timeout: 900
+      MemorySize: 3008
+      EphemeralStorage:
+        Size: 10240
+      Environment:
+        Variables:
+          NODE_ENV: production
+          MONGO_URI: !Ref MongoUri
+          DB_NAME: mcq_shorts
+          JWT_SECRET: !Ref JwtSecret
+          OPENAI_API_KEY: !Ref OpenAiApiKey
+          S3_OUTPUT_BUCKET: !Ref OutputBucket
+          OUTPUT_DIR: /tmp/output/videos
+          UPLOADS_DIR: /tmp/uploads
+          CACHE_DIR: /tmp/cache
+          TEMP_DIR: /tmp/temp
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:AbortMultipartUpload
+              Resource: !Sub
+                - '${BucketArn}/*'
+                - BucketArn: !GetAtt OutputBucket.Arn
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      ImageUri: !Ref ContainerImageUri
+      ImageConfig:
+        Command:
+          - dist/lambda/apiHandler.handler
+      Timeout: 120
+      MemorySize: 1536
+      Environment:
+        Variables:
+          NODE_ENV: production
+          MONGO_URI: !Ref MongoUri
+          DB_NAME: mcq_shorts
+          JWT_SECRET: !Ref JwtSecret
+          OPENAI_API_KEY: !Ref OpenAiApiKey
+          CORS_ORIGIN: !Ref CorsOrigin
+          OUTPUT_DIR: /tmp/output/videos
+          UPLOADS_DIR: /tmp/uploads
+          CACHE_DIR: /tmp/cache
+          TEMP_DIR: /tmp/temp
+          VIDEO_WORKER_FUNCTION_NAME: !Ref VideoWorkerFunction
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt VideoWorkerFunction.Arn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:DeleteObject
+              Resource: !Sub
+                - '${BucketArn}/*'
+                - BucketArn: !GetAtt OutputBucket.Arn
+      Events:
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  HttpApiUrl:
+    Description: Base URL for the app and /api routes
+    Value: !GetAtt HttpApi.ApiEndpoint
+  OutputBucketName:
+    Description: S3 bucket for rendered videos (private; served via presigned URLs)
+    Value: !Ref OutputBucket
+  VideoWorkerFunctionName:
+    Description: Worker Lambda name (also set on API as VIDEO_WORKER_FUNCTION_NAME)
+    Value: !Ref VideoWorkerFunction

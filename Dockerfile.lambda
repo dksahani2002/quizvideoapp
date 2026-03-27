@@ -1,0 +1,37 @@
+# AWS Lambda container (Node 20 + ffmpeg) for API and video-worker handlers.
+# Build from repo root:
+#   docker build --platform linux/amd64 -f Dockerfile.lambda -t mcq-shorts-agent:latest .
+
+FROM node:20-bookworm AS build
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
+
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM public.ecr.aws/lambda/nodejs:20-x86_64
+RUN dnf install -y tar xz curl-minimal findutils && dnf clean all \
+  # Use an ffmpeg build that includes drawtext (libfreetype) for the pipeline.
+  && curl --http1.1 -fSL --retry 5 --retry-delay 2 -o /tmp/ffmpeg.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz \
+  && tar -xJf /tmp/ffmpeg.tar.xz -C /tmp \
+  && cp /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffmpeg /usr/local/bin/ \
+  && cp /tmp/ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/ \
+  && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe \
+  && rm -rf /tmp/ffmpeg* \
+  && dnf clean all
+
+WORKDIR ${LAMBDA_TASK_ROOT}
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY --from=build /build/dist ./dist
+COPY assets ./assets
+COPY --from=build /build/frontend/dist ./frontend/dist
+
+CMD ["dist/lambda/apiHandler.handler"]

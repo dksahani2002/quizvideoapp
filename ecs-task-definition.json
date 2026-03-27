@@ -1,0 +1,91 @@
+{
+  "family": "ecs_task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "mcq-shorts-api",
+      "image": "779315395093.dkr.ecr.us-east-1.amazonaws.com/mcq-shorts-agent:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "hostPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "OUTPUT_DIR",
+          "value": "/app/output"
+        },
+        {
+          "name": "CACHE_DIR",
+          "value": "/app/cache"
+        },
+        {
+          "name": "TEMP_DIR",
+          "value": "/tmp/video-processing"
+        },
+        {
+          "name": "OPENAI_URL",
+          "value": "https://api.openai.com/v1"
+        },
+        {
+          "name": "YT_CLIENT_ID",
+          "value": "REPLACE_WITH_GOOGLE_OAUTH_CLIENT_ID"
+        },
+        {
+          "name": "YT_REDIRECT_URI",
+          "value": "http://localhost:3000/auth/youtube/callback"
+        },
+        {
+          "name": "IG_USERNAME",
+          "value": "finshotbydd"
+        },
+        {
+          "name": "IG_PASSWORD",
+          "value": "REPLACE_WITH_INSTAGRAM_PASSWORD"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "/mcq-shorts/openai_api_key"
+        },
+        {
+          "name": "YT_CLIENT_SECRET",
+          "valueFrom": "/mcq-shorts/youtube/client_secret"
+        },
+        {
+          "name": "YT_REFRESH_TOKEN",
+          "valueFrom": "/mcq-shorts/youtube/refresh_token"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mcq-shorts-api",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "mountPoints": []
+    }
+  ],
+  "volumes": [],
+  "executionRoleArn": "arn:aws:iam::779315395093:role/ecsTaskExecutionRole"
+}

@@ -1,0 +1,77 @@
+# -------------------------
+# Node dependencies
+# -------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# -------------------------
+# Build outputs
+# -------------------------
+dist/
+build/
+out/
+coverage/
+output/
+cache/
+
+# -------------------------
+# Environment variables
+# -------------------------
+.env
+.env.*
+!.env.example
+
+# -------------------------
+# Logs
+# -------------------------
+logs/
+*.log
+
+# -------------------------
+# OS files
+# -------------------------
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# IDE / Editor
+# -------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# -------------------------
+# TypeScript
+# -------------------------
+*.tsbuildinfo
+
+# -------------------------
+# Docker
+# -------------------------
+docker-data/
+*.tar
+
+# -------------------------
+# AWS / Cloud
+# -------------------------
+.aws/
+cdk.out/
+terraform.tfstate
+terraform.tfstate.*
+.terraform/
+
+# -------------------------
+# Test / Cache
+# -------------------------
+.cache/
+.nyc_output/
+
+# -------------------------
+# Temporary files
+# -------------------------
+tmp/
+temp/

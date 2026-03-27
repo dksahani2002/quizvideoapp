@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "videogenapp"
+resolve_s3 = true
+s3_prefix = "videogenapp"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "ContainerImageUri=\"779315395093.dkr.ecr.ap-south-1.amazonaws.com/mcq-shorts-agent:latest\" CorsOrigin=\"*\""
+image_repositories = []
+
+[default.global.parameters]
+region = "ap-south-1"

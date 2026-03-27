@@ -1,0 +1,28 @@
+{
+  "openai": {
+    "apiKey": "",
+    "apiUrl": "https://api.openai.com/v1"
+  },
+  "tts": {
+    "provider": "system",
+    "voice": "Alex"
+  },
+  "youtube": {
+    "clientId": "",
+    "clientSecret": "",
+    "redirectUri": "",
+    "refreshToken": ""
+  },
+  "instagram": {
+    "username": "",
+    "password": ""
+  },
+  "theme": {
+    "preset": "deep-purple",
+    "customStops": [],
+    "backgroundImage": "",
+    "backgroundOpacity": 1,
+    "textAlign": "center",
+    "fontSize": "medium"
+  }
+}

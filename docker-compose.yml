@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  mcq-shorts-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      YT_CLIENT_ID: ${YT_CLIENT_ID}
+      YT_CLIENT_SECRET: ${YT_CLIENT_SECRET}
+      YT_REFRESH_TOKEN: ${YT_REFRESH_TOKEN}
+      IG_USERNAME: ${IG_USERNAME}
+      IG_PASSWORD: ${IG_PASSWORD}
+      OUTPUT_DIR: /app/output
+      TEMP_DIR: /tmp/video-processing
+    volumes:
+      - ./output:/app/output
+      - ./temp:/tmp/video-processing
+      - ./cache:/app/cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
