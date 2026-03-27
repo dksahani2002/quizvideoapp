@@ -111,6 +111,21 @@ export interface RenderConfig {
   /** Replaces the default "QUIZ" header label (short branding). */
   headerTitle?: string;
 
+  // Captions/subtitles
+  captions?: {
+    /** Generate subtitle sidecars (SRT/VTT). */
+    enabled?: boolean;
+    /** Burn-in subtitles into the final MP4 (slower, but universal). */
+    burnIn?: boolean;
+  };
+
+  // Brand watermark
+  watermark?: {
+    imagePath?: string;
+    opacity?: number; // 0-1
+    position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  };
+
   /** When using OpenAI TTS, optional base URL (e.g. same as chat completions). */
   openaiApiUrl?: string;
   /** API key for OpenAI TTS when not relying on process.env. */

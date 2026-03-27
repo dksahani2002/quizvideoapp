@@ -31,6 +31,10 @@ export function CreateVideo() {
   const [layoutPresetId, setLayoutPresetId] = useState<LayoutPresetId>('balanced');
   const [layoutDensity, setLayoutDensity] = useState(1);
   const [headerTitle, setHeaderTitle] = useState('');
+  const [introScript, setIntroScript] = useState('');
+  const [outroScript, setOutroScript] = useState('');
+  const [ctaLine, setCtaLine] = useState('');
+  const [captionsBurnIn, setCaptionsBurnIn] = useState(false);
 
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -117,6 +121,10 @@ export function CreateVideo() {
         : {}),
       layoutDensity: effectiveLayoutDensity,
       headerTitle: headerTitle.trim().slice(0, 32) || undefined,
+      introScript: introScript.trim() || undefined,
+      outroScript: outroScript.trim() || undefined,
+      ctaLine: ctaLine.trim() || undefined,
+      captionsBurnIn,
       ...(ttsProvider === 'openai'
         ? { ttsVoice: openaiVoice, ttsModel: openaiTtsModel }
         : {}),
@@ -257,6 +265,45 @@ export function CreateVideo() {
               placeholder="E.g. prefer numerical examples, avoid jargon, focus on misconceptions…"
               className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm resize-y min-h-[80px]"
             />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium mb-1 text-[hsl(var(--muted-foreground))]">Intro script (optional)</label>
+              <input
+                value={introScript}
+                onChange={e => setIntroScript(e.target.value)}
+                placeholder="Use {{topic}} to include the topic"
+                className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-[hsl(var(--muted-foreground))]">Outro script (optional)</label>
+              <input
+                value={outroScript}
+                onChange={e => setOutroScript(e.target.value)}
+                placeholder="Use {{topic}} to include the topic"
+                className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-[hsl(var(--muted-foreground))]">CTA line (optional)</label>
+              <input
+                value={ctaLine}
+                onChange={e => setCtaLine(e.target.value)}
+                placeholder="e.g. Follow for more"
+                className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm"
+              />
+            </div>
+            <div className="flex items-center gap-3 pt-6">
+              <input
+                id="burnin"
+                type="checkbox"
+                checked={captionsBurnIn}
+                onChange={(e) => setCaptionsBurnIn(e.target.checked)}
+                className="accent-[hsl(var(--primary))]"
+              />
+              <label htmlFor="burnin" className="text-sm text-[hsl(var(--muted-foreground))]">Burn-in subtitles</label>
+            </div>
           </div>
         </div>
       )}

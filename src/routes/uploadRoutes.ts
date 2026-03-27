@@ -13,12 +13,8 @@ function classifyInstagramFailure(errors: string[]): { status: number; hint?: st
   const msg = (errors || []).join("\n");
   const m = msg.toLowerCase();
 
-  if (
-    m.includes("credentials not found") ||
-    m.includes("ig_username") ||
-    m.includes("ig_password")
-  ) {
-    return { status: 400, hint: "Set Instagram username/password in settings or environment variables." };
+  if (m.includes("instagram upload is not supported")) {
+    return { status: 400, hint: "Use Publishing to connect Instagram (Meta Graph API) and publish." };
   }
 
   if (
@@ -166,4 +162,5 @@ export function createUploadRoutes(envConfig: EnvConfig): Router {
   return router;
 }
 
-// createUploadRoutes exported above
+// Backward-compatible alias while normalizing route factory naming.
+export const createUploadsRoutes = createUploadRoutes;

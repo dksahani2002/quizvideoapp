@@ -9,6 +9,8 @@ import { Dashboard } from './pages/Dashboard';
 import { CreateVideo } from './pages/CreateVideo';
 import { VideoLibrary } from './pages/VideoLibrary';
 import { SettingsPage } from './pages/Settings';
+import { PublishingPage } from './pages/Publishing';
+import { AdminPage } from './pages/Admin';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 
@@ -87,6 +89,8 @@ export default function App() {
             <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
             <Route path="/create" element={<ProtectedLayout><CreateVideo /></ProtectedLayout>} />
             <Route path="/videos" element={<ProtectedLayout><VideoLibrary /></ProtectedLayout>} />
+            <Route path="/publishing" element={<ProtectedLayout><PublishingPage /></ProtectedLayout>} />
+            <Route path="/admin" element={<ProtectedLayout><AdminPage /></ProtectedLayout>} />
             <Route path="/settings" element={<ProtectedLayout><SettingsPage /></ProtectedLayout>} />
           </Routes>
         </BrowserRouter>

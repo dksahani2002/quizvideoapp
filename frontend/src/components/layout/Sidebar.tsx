@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, Settings, Film, LogOut } from 'lucide-react';
+import { Home, PlusCircle, Settings, Film, LogOut, UploadCloud, Shield } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -7,12 +7,14 @@ const links = [
   { to: '/', icon: Home, label: 'Dashboard' },
   { to: '/create', icon: PlusCircle, label: 'Create Video' },
   { to: '/videos', icon: Film, label: 'Video Library' },
+  { to: '/publishing', icon: UploadCloud, label: 'Publishing' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = user?.role === 'admin';
 
   function handleLogout() {
     logout();
@@ -43,6 +45,22 @@ export function Sidebar() {
             {label}
           </NavLink>
         ))}
+        {isAdmin && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                  : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:bg-[hsl(var(--secondary))]'
+              )
+            }
+          >
+            <Shield size={18} />
+            Admin
+          </NavLink>
+        )}
       </nav>
       {user && (
         <div className="p-4 border-t border-[hsl(var(--border))]">

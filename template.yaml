@@ -52,7 +52,7 @@ Resources:
               - HEAD
             AllowedOrigins:
               - '*'
-            ExposeHeaders:
+            ExposedHeaders:
               - Accept-Ranges
               - Content-Range
               - Content-Length
@@ -95,6 +95,8 @@ Resources:
           MONGO_URI: !Ref MongoUri
           DB_NAME: mcq_shorts
           JWT_SECRET: !Ref JwtSecret
+          # KMS is recommended, but allow bootstrapping without it.
+          APP_ENCRYPTION_KEY: !Ref JwtSecret
           OPENAI_API_KEY: !Ref OpenAiApiKey
           S3_OUTPUT_BUCKET: !Ref OutputBucket
           OUTPUT_DIR: /tmp/output/videos
@@ -128,8 +130,11 @@ Resources:
           MONGO_URI: !Ref MongoUri
           DB_NAME: mcq_shorts
           JWT_SECRET: !Ref JwtSecret
+          APP_ENCRYPTION_KEY: !Ref JwtSecret
           OPENAI_API_KEY: !Ref OpenAiApiKey
           CORS_ORIGIN: !Ref CorsOrigin
+          SKIP_STUCK_RETRY_ON_COLD_START: "1"
+          S3_OUTPUT_BUCKET: !Ref OutputBucket
           OUTPUT_DIR: /tmp/output/videos
           UPLOADS_DIR: /tmp/uploads
           CACHE_DIR: /tmp/cache

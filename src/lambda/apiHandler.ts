@@ -5,7 +5,6 @@ import "dotenv/config";
 import { loadEnvConfig, assertProductionConfig } from "../config/envConfig.js";
 import { initDatabase } from "../db/connection.js";
 import { createApp } from "../app.js";
-import { retryStuckJobs } from "../utils/jobRunner.js";
 
 let cached: Handler | undefined;
 
@@ -15,7 +14,10 @@ export const handler: Handler = async (event, context, callback) => {
     const env = loadEnvConfig();
     assertProductionConfig(env);
     await initDatabase();
-    if (process.env.SKIP_STUCK_RETRY_ON_COLD_START !== "1") {
+    // Keep API Lambda cold-start lean. Stuck-job retry is optional and lazy-loaded.
+    // The heavy job runner import graph can cause init timeouts in Lambda.
+    if (process.env.SKIP_STUCK_RETRY_ON_COLD_START === "0") {
+      const { retryStuckJobs } = await import("../utils/jobRunner.js");
       await retryStuckJobs();
     }
     const app = createApp(env);

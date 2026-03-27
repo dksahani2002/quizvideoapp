@@ -1,5 +1,7 @@
 import { createReadStream, createWriteStream } from 'fs';
+import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
+import type { Request, Response } from 'express';
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -36,6 +38,60 @@ export async function deleteObjectFromS3(bucket: string, key: string): Promise<v
 export async function getPresignedGetUrl(bucket: string, key: string, expiresInSeconds = 3600): Promise<string> {
   const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
   return getSignedUrl(client(), cmd, { expiresIn: expiresInSeconds });
+}
+
+/** Stream an object through Express (supports Range) for <video> playback. */
+export async function streamS3ObjectToHttpResponse(
+  bucket: string,
+  key: string,
+  req: Request,
+  res: Response
+): Promise<void> {
+  const range = req.headers.range;
+  const cmd = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ...(typeof range === 'string' && range ? { Range: range } : {}),
+  });
+  try {
+    const out = await client().send(cmd);
+    const body = out.Body;
+    if (!body) {
+      res.status(500).json({ success: false, error: 'Empty S3 body' });
+      return;
+    }
+    res.setHeader('Content-Type', out.ContentType || 'video/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'no-store');
+    if (out.ContentRange) {
+      res.status(206);
+      res.setHeader('Content-Range', out.ContentRange);
+    } else {
+      res.status(200);
+    }
+    if (out.ContentLength != null) {
+      res.setHeader('Content-Length', String(out.ContentLength));
+    }
+    const readable = body as Readable;
+    readable.on('error', () => {
+      if (!res.writableEnded) res.destroy();
+    });
+    res.on('close', () => {
+      readable.destroy();
+    });
+    readable.pipe(res);
+  } catch (e: unknown) {
+    const err = e as { $metadata?: { httpStatusCode?: number }; Code?: string; name?: string };
+    const status = err?.$metadata?.httpStatusCode;
+    const code = err?.Code || err?.name;
+    if (status === 404 || code === 'NoSuchKey' || code === 'NotFound') {
+      if (!res.headersSent) {
+        res.status(404).json({ success: false, error: 'Video file missing' });
+      }
+      return;
+    }
+    throw e;
+  }
 }
 
 export async function downloadObjectToFile(bucket: string, key: string, outPath: string): Promise<void> {

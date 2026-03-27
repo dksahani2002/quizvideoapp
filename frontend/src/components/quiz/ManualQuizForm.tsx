@@ -39,13 +39,28 @@ export function ManualQuizForm({ quizzes, onChange }: Props) {
       if (!file) return;
       try {
         const text = await file.text();
-        const data = JSON.parse(text);
-        const arr = Array.isArray(data) ? data : data.mcqs || data.quizzes || [];
-        const parsed: Quiz[] = arr.map((q: any) => ({
-          question: q.question || '',
-          options: (q.options?.length === 4 ? q.options : ['', '', '', '']) as [string, string, string, string],
-          answerIndex: (q.answerIndex ?? q.answer ?? 0) as 0 | 1 | 2 | 3,
-        }));
+        const data: unknown = JSON.parse(text);
+        const obj = (typeof data === 'object' && data !== null) ? (data as Record<string, unknown>) : null;
+        const arr: unknown[] = Array.isArray(data)
+          ? data
+          : Array.isArray(obj?.mcqs)
+            ? (obj!.mcqs as unknown[])
+            : Array.isArray(obj?.quizzes)
+              ? (obj!.quizzes as unknown[])
+              : [];
+
+        const parsed: Quiz[] = arr.map((raw) => {
+          const q = (typeof raw === 'object' && raw !== null) ? (raw as Record<string, unknown>) : {};
+          const question = typeof q.question === 'string' ? q.question : '';
+          const rawOptions = Array.isArray(q.options) ? q.options : [];
+          const options = (rawOptions.length === 4 && rawOptions.every(v => typeof v === 'string')
+            ? (rawOptions as [string, string, string, string])
+            : ['', '', '', ''] as [string, string, string, string]);
+          const rawAnswerIndex = (q.answerIndex ?? q.answer);
+          const answerIndexNum = typeof rawAnswerIndex === 'number' ? rawAnswerIndex : 0;
+          const answerIndex = (answerIndexNum >= 0 && answerIndexNum <= 3 ? answerIndexNum : 0) as 0 | 1 | 2 | 3;
+          return { question, options, answerIndex };
+        });
         if (parsed.length > 0) onChange(parsed);
       } catch {
         alert('Failed to parse JSON file');

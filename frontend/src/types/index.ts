@@ -38,7 +38,15 @@ export interface AppSettings {
   tts: { provider: 'system' | 'openai' | 'elevenlabs'; voice: string };
   elevenlabs: { apiKey: string; voiceId: string; voiceName: string; modelId: string };
   youtube: { clientId: string; clientSecret: string; redirectUri: string; refreshToken: string };
-  instagram: { username: string; password: string };
+  instagramGraph: { pageId: string; igUserId: string; accessToken: string; tokenExpiresAt: string };
+  brand: {
+    introScript: string;
+    outroScript: string;
+    ctaLine: string;
+    watermarkImage: string;
+    watermarkOpacity: number;
+    watermarkPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  };
   theme: ThemeConfig;
 }
 
@@ -70,6 +78,12 @@ export interface GenerateRequest {
   systemVoice?: string;
   /** Override ElevenLabs model for this render */
   elevenlabsModelId?: string;
+
+  // Brand kit overrides
+  introScript?: string;
+  outroScript?: string;
+  ctaLine?: string;
+  captionsBurnIn?: boolean;
 }
 
 export interface User {

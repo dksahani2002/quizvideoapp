@@ -8,8 +8,6 @@ import {
   YouTubeUploadResult,
 } from "./platforms/youtubeService.js";
 import {
-  uploadLatestVideoToInstagram,
-  getManualInstagramUploadInstructions,
   InstagramUploadResult,
 } from "./platforms/instagramService.js";
 
@@ -38,10 +36,7 @@ export async function uploadToAllPlatforms(
     redirectUri: string;
     refreshToken: string;
   },
-  instagramCredentials: {
-    username?: string;
-    password?: string;
-  }
+  _instagramCredentials: Record<string, never>
 ): Promise<UploadOrchestrationResult> {
   console.log("\n🚀 Starting Social Media Upload Process\n");
   console.log("=".repeat(50));
@@ -78,22 +73,12 @@ export async function uploadToAllPlatforms(
     if (request.instagram) {
       console.log("\n📸 Uploading to Instagram...");
       console.log("-".repeat(50));
-      const instagramResult = await uploadLatestVideoToInstagram(
-        outputDir,
-        topic,
-        instagramCredentials
-      );
+      const instagramResult: InstagramUploadResult = {
+        success: false,
+        error: "Instagram uploads are disabled here. Use Publishing via Meta Graph API instead.",
+      };
       result.instagram = instagramResult;
-
-      if (instagramResult.success) {
-        console.log("✅ Instagram upload completed!");
-      } else {
-        console.log("⚠️  Instagram upload failed");
-        if (instagramResult.error) {
-          errors.push(`Instagram: ${instagramResult.error}`);
-        }
-        console.log("\n" + getManualInstagramUploadInstructions(outputDir));
-      }
+      errors.push(`Instagram: ${instagramResult.error}`);
     }
 
     console.log("\n" + "=".repeat(50));
@@ -139,13 +124,15 @@ export async function uploadToYouTubeOnly(
 export async function uploadToInstagramOnly(
   outputDir: string,
   topic: string,
-  instagramCredentials: {
-    username?: string;
-    password?: string;
-  }
+  _instagramCredentials: Record<string, never>
 ): Promise<InstagramUploadResult> {
+  void outputDir;
+  void topic;
   console.log("\n🚀 Uploading to Instagram...\n");
-  return uploadLatestVideoToInstagram(outputDir, topic, instagramCredentials);
+  return {
+    success: false,
+    error: "Instagram uploads are disabled here. Use Publishing via Meta Graph API instead.",
+  };
 }
 
 // Types exported via declarations above

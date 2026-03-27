@@ -11,6 +11,7 @@ import { uploadFileToS3 } from '../services/s3Storage.js';
 import { renderIntroSlide, renderOutroSlide } from './ffmpeg.js';
 import type { Quiz } from '../types/index.js';
 import type { MCQ } from '../agents/mcqAgent.js';
+import { VideoJob } from '../db/models/VideoJob.js';
 
 type GenerateRequestPayload = {
   topic: string;
@@ -34,6 +35,10 @@ type GenerateRequestPayload = {
   ttsModel?: string;
   systemVoice?: string;
   elevenlabsModelId?: string;
+  introScript?: string;
+  outroScript?: string;
+  ctaLine?: string;
+  captionsBurnIn?: boolean;
 };
 
 const running = new Set<string>();
@@ -43,6 +48,21 @@ async function setProgress(videoId: string, stage: string, message: string): Pro
     progressStage: stage,
     progressMessage: message,
   }).catch(() => {});
+}
+
+async function appendJobEvent(videoId: string, stage: string, message: string): Promise<void> {
+  await VideoJob.findOneAndUpdate(
+    { videoId },
+    {
+      $set: { stage, message },
+      $push: { events: { at: new Date(), stage, message } },
+    }
+  ).catch(() => {});
+}
+
+async function isCancelRequested(videoId: string): Promise<boolean> {
+  const job = await VideoJob.findOne({ videoId }).select('cancelRequested status').lean();
+  return !!(job && (job.cancelRequested || job.status === 'cancelled'));
 }
 
 /** False if the video row was deleted (e.g. user cancelled while generating). */
@@ -62,6 +82,14 @@ export async function runVideoJob(videoId: string): Promise<void> {
       await Video.findByIdAndUpdate(videoId, { status: 'failed', lastError: 'Missing request payload' });
       return;
     }
+
+    await VideoJob.findOneAndUpdate(
+      { videoId: doc._id },
+      {
+        $set: { status: 'running', stage: 'start', message: 'Generation started' },
+        $push: { events: { at: new Date(), stage: 'start', message: 'Generation started' } },
+      }
+    ).catch(() => {});
 
     const req = JSON.parse(doc.requestJson) as GenerateRequestPayload;
     const userId = String(doc.userId);
@@ -116,9 +144,24 @@ export async function runVideoJob(videoId: string): Promise<void> {
 
     await Video.findByIdAndUpdate(videoId, { attempts: (doc.attempts || 0) + 1, lastError: '', status: 'generating' });
     await setProgress(videoId, 'start', 'Generation started');
+    await appendJobEvent(videoId, 'start', 'Generation started');
     const ttsModel = req.ttsModel?.trim() || 'tts-1';
     const elevenModel = req.elevenlabsModelId?.trim() || settings.elevenlabs.modelId || 'eleven_turbo_v2_5';
-    const openaiKey = settings.openai.apiKey?.trim() || env.OPENAI_API_KEY;
+    const openaiKey = settings.openai.apiKey?.trim() || '';
+
+    if (await isCancelRequested(videoId)) {
+      await Video.findByIdAndUpdate(videoId, {
+        status: 'failed',
+        lastError: 'Cancelled',
+        progressStage: 'cancelled',
+        progressMessage: 'Cancelled',
+      }).catch(() => {});
+      await VideoJob.findOneAndUpdate(
+        { videoId },
+        { $set: { status: 'cancelled', stage: 'cancelled', message: 'Cancelled' }, $push: { events: { at: new Date(), stage: 'cancelled', message: 'Cancelled' } } }
+      ).catch(() => {});
+      return;
+    }
 
     if (tts === 'system' && process.platform !== 'darwin') {
       if (openaiKey) {
@@ -141,13 +184,16 @@ export async function runVideoJob(videoId: string): Promise<void> {
       cacheDir: introOutroCache,
       elevenlabsApiKey: settings.elevenlabs.apiKey || undefined,
       elevenlabsModelId: elevenModel,
-      openaiApiUrl: settings.openai.apiUrl || env.OPENAI_URL,
+      openaiApiUrl: settings.openai.apiUrl || 'https://api.openai.com/v1',
     });
 
     const lang = quizzes[0]?.language || 'en';
     const topicSafe = sanitizeForTTS(req.topic || 'Quiz');
-    const introSpeech = `Can you answer this? This quiz is about ${topicSafe}.`;
-    const outroSpeech = 'Follow for more quizzes. Like and subscribe.';
+    const introTpl = (req.introScript || settings.brand?.introScript || '').trim() || 'Can you answer this? This quiz is about {{topic}}.';
+    const outroTpl = (req.outroScript || settings.brand?.outroScript || '').trim() || 'Follow for more quizzes. Like and subscribe.';
+    const cta = (req.ctaLine || settings.brand?.ctaLine || '').trim();
+    const introSpeech = introTpl.replace(/\{\{\s*topic\s*\}\}/gi, topicSafe);
+    const outroSpeech = (cta ? `${outroTpl} ${cta}` : outroTpl).replace(/\{\{\s*topic\s*\}\}/gi, topicSafe);
 
     let introVoiceFile = './assets/audio/intro_voice.mp3';
     let outroVoiceFile = './assets/audio/outro_voice.mp3';
@@ -161,6 +207,7 @@ export async function runVideoJob(videoId: string): Promise<void> {
     const introFile = path.join(tempDir, 'intro.mp4');
     const outroFile = path.join(tempDir, 'outro.mp4');
     await setProgress(videoId, 'intro', 'Rendering intro');
+    await appendJobEvent(videoId, 'intro', 'Rendering intro');
     await renderIntroSlide(introFile, req.topic || 'Quiz', {
       width: 1080, height: 1920, fps: 30, fontFile,
       voiceFile: introVoiceFile,
@@ -168,15 +215,19 @@ export async function runVideoJob(videoId: string): Promise<void> {
       dingFile: './assets/audio/ding.mp3',
     });
     if (!(await videoRowExists(videoId))) return;
+    if (await isCancelRequested(videoId)) throw new Error('Cancelled');
     await setProgress(videoId, 'outro', 'Rendering outro');
+    await appendJobEvent(videoId, 'outro', 'Rendering outro');
     await renderOutroSlide(outroFile, {
       width: 1080, height: 1920, fps: 30, fontFile,
       voiceFile: outroVoiceFile,
       bgmFile: './assets/audio/bgm.mp3',
     });
     if (!(await videoRowExists(videoId))) return;
+    if (await isCancelRequested(videoId)) throw new Error('Cancelled');
 
     await setProgress(videoId, 'voice', 'Voice generation started');
+    await appendJobEvent(videoId, 'voice', 'Voice generation started');
 
     await renderVideo(quizzes, {
       fontFile,
@@ -192,6 +243,14 @@ export async function runVideoJob(videoId: string): Promise<void> {
       textAlign: req.textAlign || undefined,
       layoutDensity: typeof req.layoutDensity === 'number' ? req.layoutDensity : undefined,
       headerTitle: req.headerTitle?.trim() || undefined,
+      captions: { enabled: true, burnIn: !!req.captionsBurnIn },
+      watermark: settings.brand?.watermarkImage
+        ? {
+            imagePath: settings.brand.watermarkImage,
+            opacity: settings.brand.watermarkOpacity,
+            position: settings.brand.watermarkPosition,
+          }
+        : undefined,
       elevenlabsApiKey: settings.elevenlabs.apiKey || undefined,
       elevenlabsModelId: elevenModel,
       openaiApiKey: openaiKey || undefined,
@@ -199,6 +258,7 @@ export async function runVideoJob(videoId: string): Promise<void> {
     } as any);
     if (!(await videoRowExists(videoId))) return;
     await setProgress(videoId, 'render', 'Video rendering completed, finalizing');
+    await appendJobEvent(videoId, 'render', 'Video rendering completed, finalizing');
 
     const resolvedDir = path.resolve(userVideoDir);
     const outputFiles = fs.readdirSync(resolvedDir)
@@ -235,14 +295,27 @@ export async function runVideoJob(videoId: string): Promise<void> {
       progressStage: 'completed',
       progressMessage: 'Completed',
     });
+    await VideoJob.findOneAndUpdate(
+      { videoId },
+      { $set: { status: 'completed', stage: 'completed', message: 'Completed' }, $push: { events: { at: new Date(), stage: 'completed', message: 'Completed' } } }
+    ).catch(() => {});
   } catch (err: any) {
     if (!(await videoRowExists(videoId))) return;
+    const msg = err?.message || String(err);
+    const cancelled = String(msg || '').toLowerCase().includes('cancel');
     await Video.findByIdAndUpdate(videoId, {
       status: 'failed',
-      lastError: err?.message || String(err),
-      progressStage: 'failed',
-      progressMessage: (err?.message || String(err) || 'Failed').slice(0, 500),
+      lastError: cancelled ? 'Cancelled' : msg,
+      progressStage: cancelled ? 'cancelled' : 'failed',
+      progressMessage: (cancelled ? 'Cancelled' : (msg || 'Failed')).slice(0, 500),
     }).catch(() => {});
+    await VideoJob.findOneAndUpdate(
+      { videoId },
+      {
+        $set: { status: cancelled ? 'cancelled' : 'failed', stage: cancelled ? 'cancelled' : 'failed', message: cancelled ? 'Cancelled' : (msg || 'Failed') },
+        $push: { events: { at: new Date(), stage: cancelled ? 'cancelled' : 'failed', message: cancelled ? 'Cancelled' : (msg || 'Failed') } },
+      }
+    ).catch(() => {});
   } finally {
     running.delete(videoId);
   }

@@ -10,6 +10,7 @@ import {
   extractDuration,
   speedUpVideo,
   trimFinalVideoToAudioMaster,
+  overlayWatermark,
 } from '../utils/ffmpeg.js';
 import fs from 'fs/promises';
 
@@ -87,6 +88,18 @@ export async function concatSegments(
 
   // Safety net if any drift remains (e.g. odd segment edge case).
   await trimFinalVideoToAudioMaster(outputFile);
+
+  // Optional watermark (brand)
+  if (config.watermark?.imagePath) {
+    try {
+      await overlayWatermark(outputFile, config.watermark.imagePath, {
+        opacity: config.watermark.opacity,
+        position: config.watermark.position,
+      });
+    } catch (e: any) {
+      console.warn('Watermark overlay failed:', e?.message || e);
+    }
+  }
 
   // Check total duration
   const totalDuration = await extractDuration(outputFile);

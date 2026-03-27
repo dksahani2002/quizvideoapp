@@ -5,10 +5,10 @@ import { User } from '../db/models/User.js';
 import { loadEnvConfig } from '../config/envConfig.js';
 import { authMiddleware } from '../middleware/auth.js';
 
-function signToken(user: { id: string; email: string; name: string }): string {
+function signToken(user: { id: string; email: string; name: string; role: 'user' | 'admin' }): string {
   const env = loadEnvConfig();
   return jwt.sign(
-    { id: user.id, email: user.email, name: user.name },
+    { id: user.id, email: user.email, name: user.name, role: user.role },
     env.JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -37,11 +37,11 @@ export function createAuthRoutes(): Router {
 
       const hashed = await bcrypt.hash(password, 12);
       const user = await User.create({ name, email: email.toLowerCase(), password: hashed });
-      const token = signToken({ id: user._id.toString(), email: user.email, name: user.name });
+      const token = signToken({ id: user._id.toString(), email: user.email, name: user.name, role: user.role || 'user' });
 
       res.status(201).json({
         success: true,
-        data: { token, user: { id: user._id.toString(), name: user.name, email: user.email } },
+        data: { token, user: { id: user._id.toString(), name: user.name, email: user.email, role: user.role || 'user' } },
       });
     } catch (error) {
       res.status(500).json({ success: false, error: String(error) });
@@ -68,11 +68,11 @@ export function createAuthRoutes(): Router {
         return;
       }
 
-      const token = signToken({ id: user._id.toString(), email: user.email, name: user.name });
+      const token = signToken({ id: user._id.toString(), email: user.email, name: user.name, role: user.role || 'user' });
 
       res.json({
         success: true,
-        data: { token, user: { id: user._id.toString(), name: user.name, email: user.email } },
+        data: { token, user: { id: user._id.toString(), name: user.name, email: user.email, role: user.role || 'user' } },
       });
     } catch (error) {
       res.status(500).json({ success: false, error: String(error) });

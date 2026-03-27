@@ -1,18 +1,67 @@
-import { useState, useEffect } from 'react';
-import { useSettings, useSaveSettings } from '../api/settings';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useSettings, useSaveSettings, type DeepPartial } from '../api/settings';
 import { api } from '../api/client';
 import { Save, Eye, EyeOff, CheckCircle, Loader2, RefreshCw } from 'lucide-react';
-import type { ElevenLabsVoice } from '../types';
+import type { AppSettings, ElevenLabsVoice } from '../types';
+
+function Field({
+  label,
+  value,
+  onChange,
+  secret,
+  placeholder,
+  revealed,
+  onToggleReveal,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  secret?: boolean;
+  placeholder?: string;
+  revealed?: boolean;
+  onToggleReveal?: () => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1.5 text-[hsl(var(--muted-foreground))]">{label}</label>
+      <div className="relative">
+        <input
+          type={secret && !revealed ? 'password' : 'text'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]/50 pr-10"
+          placeholder={placeholder || (secret ? '••••••••' : '')}
+        />
+        {secret && (
+          <button
+            type="button"
+            onClick={onToggleReveal}
+            className="absolute right-2.5 top-2 text-[hsl(var(--muted-foreground))]"
+          >
+            {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function SettingsPage() {
+  const loc = useLocation();
   const { data: settings } = useSettings();
   const save = useSaveSettings();
+  const youtubeRef = useRef<HTMLElement | null>(null);
+  const instagramRef = useRef<HTMLElement | null>(null);
+  const focus = useMemo(() => {
+    const p = new URLSearchParams(loc.search);
+    return (p.get('focus') || '').toLowerCase();
+  }, [loc.search]);
   const [form, setForm] = useState({
     openaiKey: '', openaiUrl: 'https://api.openai.com/v1',
     ttsProvider: 'system' as 'system' | 'openai' | 'elevenlabs', ttsVoice: 'Alex',
     elevenlabsKey: '', elevenlabsVoiceId: '', elevenlabsVoiceName: '', elevenlabsModelId: 'eleven_turbo_v2_5',
     ytClientId: '', ytClientSecret: '', ytRedirectUri: '', ytRefreshToken: '',
-    igUsername: '', igPassword: '',
   });
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState(false);
@@ -22,12 +71,13 @@ export function SettingsPage() {
   const [elTestLoading, setElTestLoading] = useState(false);
   const [elTestResult, setElTestResult] = useState<string>('');
   const [elVoicesOpen, setElVoicesOpen] = useState(false);
-  const [elKeySaved, setElKeySaved] = useState(false);
   const [elShowPaidOnly, setElShowPaidOnly] = useState(false);
+
+  const elKeySaved = useMemo(() => settings?.elevenlabs?.apiKey === '••••••••', [settings]);
 
   useEffect(() => {
     if (!settings) return;
-    setElKeySaved(settings.elevenlabs?.apiKey === '••••••••');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm({
       openaiKey: settings.openai.apiKey === '••••••••' ? '' : settings.openai.apiKey,
       openaiUrl: settings.openai.apiUrl || 'https://api.openai.com/v1',
@@ -41,8 +91,6 @@ export function SettingsPage() {
       ytClientSecret: settings.youtube.clientSecret === '••••••••' ? '' : settings.youtube.clientSecret,
       ytRedirectUri: settings.youtube.redirectUri || '',
       ytRefreshToken: settings.youtube.refreshToken === '••••••••' ? '' : settings.youtube.refreshToken,
-      igUsername: settings.instagram.username || '',
-      igPassword: settings.instagram.password === '••••••••' ? '' : settings.instagram.password,
     });
   }, [settings]);
 
@@ -58,8 +106,8 @@ export function SettingsPage() {
         setElVoicesError(res.error || 'Failed to fetch voices');
         setElVoicesOpen(true);
       }
-    } catch (e: any) {
-      setElVoicesError(e.message || 'Failed to fetch voices');
+    } catch (e: unknown) {
+      setElVoicesError(e instanceof Error ? e.message : 'Failed to fetch voices');
       setElVoicesOpen(true);
     }
     setElVoicesLoading(false);
@@ -69,30 +117,37 @@ export function SettingsPage() {
     setElTestLoading(true);
     setElTestResult('');
     try {
-      const res = await api.post<{ success: boolean; data?: any; error?: string }>(
+      const res = await api.post<{ success: boolean; data?: unknown; error?: string }>(
         '/api/settings/elevenlabs/test',
         { voiceId: form.elevenlabsVoiceId, modelId: form.elevenlabsModelId }
       );
       setElTestResult(res.success ? 'OK: voice/model works for your plan' : (res.error || 'Test failed'));
-    } catch (e: any) {
-      setElTestResult(e.message || 'Test failed');
+    } catch (e: unknown) {
+      setElTestResult(e instanceof Error ? e.message : 'Test failed');
     }
     setElTestLoading(false);
   }
 
   function handleSave() {
-    const payload: Record<string, any> = {
-      openai: { apiUrl: form.openaiUrl },
+    const payload: DeepPartial<AppSettings> = {
+      openai: {
+        apiUrl: form.openaiUrl,
+        ...(form.openaiKey && form.openaiKey !== '••••••••' ? { apiKey: form.openaiKey } : {}),
+      },
       tts: { provider: form.ttsProvider, voice: form.ttsVoice },
-      elevenlabs: { voiceId: form.elevenlabsVoiceId, voiceName: form.elevenlabsVoiceName, modelId: form.elevenlabsModelId },
-      youtube: { clientId: form.ytClientId, redirectUri: form.ytRedirectUri },
-      instagram: { username: form.igUsername },
+      elevenlabs: {
+        voiceId: form.elevenlabsVoiceId,
+        voiceName: form.elevenlabsVoiceName,
+        modelId: form.elevenlabsModelId,
+        ...(form.elevenlabsKey && form.elevenlabsKey !== '••••••••' ? { apiKey: form.elevenlabsKey } : {}),
+      },
+      youtube: {
+        clientId: form.ytClientId,
+        redirectUri: form.ytRedirectUri,
+        ...(form.ytClientSecret && form.ytClientSecret !== '••••••••' ? { clientSecret: form.ytClientSecret } : {}),
+        ...(form.ytRefreshToken && form.ytRefreshToken !== '••••••••' ? { refreshToken: form.ytRefreshToken } : {}),
+      },
     };
-    if (form.openaiKey && form.openaiKey !== '••••••••') payload.openai.apiKey = form.openaiKey;
-    if (form.elevenlabsKey && form.elevenlabsKey !== '••••••••') payload.elevenlabs.apiKey = form.elevenlabsKey;
-    if (form.ytClientSecret && form.ytClientSecret !== '••••••••') payload.youtube.clientSecret = form.ytClientSecret;
-    if (form.ytRefreshToken && form.ytRefreshToken !== '••••••••') payload.youtube.refreshToken = form.ytRefreshToken;
-    if (form.igPassword && form.igPassword !== '••••••••') payload.instagram.password = form.igPassword;
 
     save.mutate(payload, {
       onSuccess: () => { setSaved(true); setTimeout(() => setSaved(false), 2000); },
@@ -101,31 +156,16 @@ export function SettingsPage() {
 
   const toggle = (key: string) => setShowKeys(p => ({ ...p, [key]: !p[key] }));
 
-  const Field = ({ label, field, secret, placeholder }: { label: string; field: keyof typeof form; secret?: boolean; placeholder?: string }) => (
-    <div>
-      <label className="block text-sm font-medium mb-1.5 text-[hsl(var(--muted-foreground))]">{label}</label>
-      <div className="relative">
-        <input
-          type={secret && !showKeys[field] ? 'password' : 'text'}
-          value={form[field]}
-          onChange={e => setForm(p => ({ ...p, [field]: e.target.value }))}
-          className="w-full px-3 py-2 rounded-lg bg-[hsl(var(--input))] border border-[hsl(var(--border))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]/50 pr-10"
-          placeholder={placeholder || (secret ? '••••••••' : '')}
-        />
-        {secret && (
-          <button type="button" onClick={() => toggle(field)} className="absolute right-2.5 top-2 text-[hsl(var(--muted-foreground))]">
-            {showKeys[field] ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
   const providerOptions: Array<{ key: 'system' | 'openai' | 'elevenlabs'; label: string }> = [
     { key: 'system', label: 'System (Free)' },
     { key: 'openai', label: 'OpenAI' },
     { key: 'elevenlabs', label: 'ElevenLabs' },
   ];
+
+  useEffect(() => {
+    if (focus === 'youtube') youtubeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (focus === 'instagram') instagramRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [focus]);
 
   return (
     <div className="max-w-2xl">
@@ -138,8 +178,19 @@ export function SettingsPage() {
         <section className="bg-[hsl(var(--card))] rounded-xl p-6 border border-[hsl(var(--border))]">
           <h2 className="text-lg font-semibold mb-4">OpenAI / LLM</h2>
           <div className="space-y-4">
-            <Field label="API Key" field="openaiKey" secret />
-            <Field label="API URL" field="openaiUrl" />
+            <Field
+              label="API Key"
+              value={form.openaiKey}
+              onChange={(v) => setForm(p => ({ ...p, openaiKey: v }))}
+              secret
+              revealed={!!showKeys.openaiKey}
+              onToggleReveal={() => toggle('openaiKey')}
+            />
+            <Field
+              label="API URL"
+              value={form.openaiUrl}
+              onChange={(v) => setForm(p => ({ ...p, openaiUrl: v }))}
+            />
           </div>
         </section>
 
@@ -165,7 +216,12 @@ export function SettingsPage() {
               </div>
             </div>
             {form.ttsProvider !== 'elevenlabs' && (
-              <Field label="Voice" field="ttsVoice" placeholder={form.ttsProvider === 'openai' ? 'alloy, nova, shimmer...' : 'Alex, Samantha...'} />
+              <Field
+                label="Voice"
+                value={form.ttsVoice}
+                onChange={(v) => setForm(p => ({ ...p, ttsVoice: v }))}
+                placeholder={form.ttsProvider === 'openai' ? 'alloy, nova, shimmer...' : 'Alex, Samantha...'}
+              />
             )}
           </div>
         </section>
@@ -177,9 +233,12 @@ export function SettingsPage() {
               <div className="flex-1">
                 <Field
                   label="API Key"
-                  field="elevenlabsKey"
+                  value={form.elevenlabsKey}
+                  onChange={(v) => setForm(p => ({ ...p, elevenlabsKey: v }))}
                   secret
                   placeholder={elKeySaved && !form.elevenlabsKey ? 'Saved (hidden)' : '••••••••'}
+                  revealed={!!showKeys.elevenlabsKey}
+                  onToggleReveal={() => toggle('elevenlabsKey')}
                 />
               </div>
               {elKeySaved && !form.elevenlabsKey && (
@@ -304,22 +363,44 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <section className="bg-[hsl(var(--card))] rounded-xl p-6 border border-[hsl(var(--border))]">
+        <section ref={(el) => { youtubeRef.current = el; }} className="bg-[hsl(var(--card))] rounded-xl p-6 border border-[hsl(var(--border))]">
           <h2 className="text-lg font-semibold mb-4">YouTube</h2>
           <div className="space-y-4">
-            <Field label="Client ID" field="ytClientId" />
-            <Field label="Client Secret" field="ytClientSecret" secret />
-            <Field label="Redirect URI" field="ytRedirectUri" />
-            <Field label="Refresh Token" field="ytRefreshToken" secret />
+            <Field
+              label="Client ID"
+              value={form.ytClientId}
+              onChange={(v) => setForm(p => ({ ...p, ytClientId: v }))}
+            />
+            <Field
+              label="Client Secret"
+              value={form.ytClientSecret}
+              onChange={(v) => setForm(p => ({ ...p, ytClientSecret: v }))}
+              secret
+              revealed={!!showKeys.ytClientSecret}
+              onToggleReveal={() => toggle('ytClientSecret')}
+            />
+            <Field
+              label="Redirect URI"
+              value={form.ytRedirectUri}
+              onChange={(v) => setForm(p => ({ ...p, ytRedirectUri: v }))}
+            />
+            <Field
+              label="Refresh Token"
+              value={form.ytRefreshToken}
+              onChange={(v) => setForm(p => ({ ...p, ytRefreshToken: v }))}
+              secret
+              revealed={!!showKeys.ytRefreshToken}
+              onToggleReveal={() => toggle('ytRefreshToken')}
+            />
           </div>
         </section>
 
-        <section className="bg-[hsl(var(--card))] rounded-xl p-6 border border-[hsl(var(--border))]">
-          <h2 className="text-lg font-semibold mb-4">Instagram</h2>
-          <div className="space-y-4">
-            <Field label="Username" field="igUsername" />
-            <Field label="Password" field="igPassword" secret />
-          </div>
+        <section ref={(el) => { instagramRef.current = el; }} className="bg-[hsl(var(--card))] rounded-xl p-6 border border-[hsl(var(--border))]">
+          <h2 className="text-lg font-semibold mb-2">Instagram (Meta Graph API)</h2>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Instagram publishing is now handled via the official Meta Graph API (no password login).
+            Connect your account in the Publishing section once enabled.
+          </p>
         </section>
 
         <button

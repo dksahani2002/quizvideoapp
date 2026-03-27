@@ -34,12 +34,24 @@
           "value": "/tmp/video-processing"
         },
         {
+          "name": "OPENAI_API_KEY",
+          "value": "${OPENAI_API_KEY}"
+        },
+        {
           "name": "OPENAI_URL",
           "value": "https://api.openai.com/v1"
         },
         {
           "name": "YT_CLIENT_ID",
-          "value": "REPLACE_WITH_GOOGLE_OAUTH_CLIENT_ID"
+          "value": "${YT_CLIENT_ID}"
+        },
+        {
+          "name": "YT_CLIENT_SECRET",
+          "value": "${YT_CLIENT_SECRET}"
+        },
+        {
+          "name": "YT_REFRESH_TOKEN",
+          "value": "${YT_REFRESH_TOKEN}"
         },
         {
           "name": "YT_REDIRECT_URI",
@@ -47,25 +59,11 @@
         },
         {
           "name": "IG_USERNAME",
-          "value": "finshotbydd"
+          "value": "${IG_USERNAME}"
         },
         {
           "name": "IG_PASSWORD",
-          "value": "REPLACE_WITH_INSTAGRAM_PASSWORD"
-        }
-      ],
-      "secrets": [
-        {
-          "name": "OPENAI_API_KEY",
-          "valueFrom": "/mcq-shorts/openai_api_key"
-        },
-        {
-          "name": "YT_CLIENT_SECRET",
-          "valueFrom": "/mcq-shorts/youtube/client_secret"
-        },
-        {
-          "name": "YT_REFRESH_TOKEN",
-          "valueFrom": "/mcq-shorts/youtube/refresh_token"
+          "value": "${IG_PASSWORD}"
         }
       ],
       "logConfiguration": {

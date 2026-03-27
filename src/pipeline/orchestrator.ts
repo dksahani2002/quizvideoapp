@@ -10,6 +10,7 @@ import { renderSegmentVideo } from './videoRenderer.js';
 import { muxSegment } from './muxer.js';
 import { concatSegments as concatVideoSegments, ConcatSegment } from './concatPipeline.js';
 import { TTSService } from '../services/ttsService.js';
+import { buildCues, writeSrtAndVtt } from './captions.js';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -235,6 +236,20 @@ export async function renderQuizVideo(
     // Extract final duration
     const { extractDuration } = await import('../utils/ffmpeg.js');
     const totalDuration = await extractDuration(finalFile);
+
+    // Captions (sidecars + optional burn-in)
+    try {
+      if (config.captions?.enabled !== false) {
+        const cues = buildCues(successfulSegments, { includeAnswers: true });
+        const { srtPath } = await writeSrtAndVtt(finalFile, cues);
+        if (config.captions?.burnIn) {
+          const { burnInSubtitles } = await import('../utils/ffmpeg.js');
+          await burnInSubtitles(finalFile, srtPath);
+        }
+      }
+    } catch (e: any) {
+      errors.push(`Captions failed: ${e?.message || String(e)}`);
+    }
     
     console.log(`✅ Final video created: ${finalFile} (${totalDuration.toFixed(2)}s)`);
     

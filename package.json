@@ -7,12 +7,13 @@
     "build": "tsc && echo '✅ Build complete'",
     "start": "node dist/index.js",
     "video": "tsx src/runVideoPipeline.ts",
-    "upload": "tsx src/agents/uploadOrchestrator.ts",
     "clean": "rm -rf dist && echo '✅ Cleaned dist folder'",
     "smoke": "bash scripts/smoke.sh",
+    "api:test": "bash scripts/api-test.sh",
     "docker:lambda": "docker build --platform linux/amd64 -f Dockerfile.lambda -t mcq-shorts-agent:latest ."
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.1018.0",
     "@aws-sdk/client-lambda": "^3.1017.0",
     "@aws-sdk/client-s3": "^3.1017.0",
     "@aws-sdk/s3-request-presigner": "^3.1017.0",

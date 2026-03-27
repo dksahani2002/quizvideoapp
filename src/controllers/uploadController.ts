@@ -54,20 +54,27 @@ export async function uploadController(
     const topic = envConfig.TOPIC || "Quiz";
     const userId = request.userId;
 
-    // Prefer per-user settings (multi-tenant). Fall back to env credentials for single-user/dev.
+    // Multi-tenant: credentials must be configured per-user in Settings.
     const userSettings = userId ? await loadSettings(userId) : null;
-
     const youtubeCredentials = {
-      clientId: userSettings?.youtube.clientId || envConfig.YT_CLIENT_ID,
-      clientSecret: userSettings?.youtube.clientSecret || envConfig.YT_CLIENT_SECRET,
-      redirectUri: userSettings?.youtube.redirectUri || envConfig.YT_REDIRECT_URI,
-      refreshToken: userSettings?.youtube.refreshToken || envConfig.YT_REFRESH_TOKEN,
+      clientId: userSettings?.youtube.clientId || "",
+      clientSecret: userSettings?.youtube.clientSecret || "",
+      redirectUri: userSettings?.youtube.redirectUri || "",
+      refreshToken: userSettings?.youtube.refreshToken || "",
     };
 
-    const instagramCredentials = {
-      username: userSettings?.instagram.username || envConfig.IG_USERNAME,
-      password: userSettings?.instagram.password || envConfig.IG_PASSWORD,
-    };
+    if (platforms.includes("youtube")) {
+      if (!youtubeCredentials.clientId || !youtubeCredentials.clientSecret || !youtubeCredentials.redirectUri || !youtubeCredentials.refreshToken) {
+        throw new Error("YouTube is not configured for this user. Add credentials in Settings and connect YouTube in Publishing.");
+      }
+    }
+
+    // Instagram publishing should be done via Meta Graph API in Publishing.
+    // Keep this endpoint explicit: if requested here, instruct user to use Publishing.
+    const instagramCredentials = {};
+    if (platforms.includes("instagram")) {
+      throw new Error("Instagram upload is not supported via /api/uploads. Use Publishing (Meta Graph API) to connect and publish.");
+    }
 
     // Resolve the directory containing the latest MP4 for upload.
     // On AWS, videos are stored in S3 and referenced by Video.s3Bucket/s3Key.

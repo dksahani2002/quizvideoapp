@@ -21,9 +21,9 @@ export function createSettingsRoutes(): Router {
           clientSecret: settings.youtube.clientSecret ? '••••••••' : '',
           refreshToken: settings.youtube.refreshToken ? '••••••••' : '',
         },
-        instagram: {
-          ...settings.instagram,
-          password: settings.instagram.password ? '••••••••' : '',
+        instagramGraph: {
+          ...settings.instagramGraph,
+          accessToken: settings.instagramGraph.accessToken ? '••••••••' : '',
         },
       };
       res.json({ success: true, data: masked });

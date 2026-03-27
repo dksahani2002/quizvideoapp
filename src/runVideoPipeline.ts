@@ -2,7 +2,7 @@
  * Integration script: Generate MCQs and render video
  *
  * Usage:
- *   # OpenAI mode (default) — requires OPENAI_API_KEY
+ *   # OpenAI mode (default) — requires OPENAI_API_KEY (for local CLI usage)
  *   TOPIC="JavaScript Event Loop" npm run video
  *
  *   # Manual / file mode — reads MCQs from a local JSON file
@@ -21,7 +21,6 @@ import { buildImagePrompts } from "./agents/promptAgent.js";
 import { exportAssets } from "./agents/exportAgent.js";
 import { renderVideo } from "./videoRenderer.js";
 import { createTTSService } from "./services/ttsService.js";
-import { loadEnvConfig } from "./config/envConfig.js";
 import { sanitizeForTTS } from "./utils/textSanitizer.js";
 import { renderIntroSlide, renderOutroSlide } from "./utils/ffmpeg.js";
 import { Quiz } from "./types/index.js";
@@ -111,10 +110,9 @@ async function runVideoPipeline() {
           ? voiceFromEnv || "alloy"
           : systemVoiceEnv || voiceFromEnv || "Alex";
 
-    const env = loadEnvConfig();
     const ttsModel = process.env.TTS_MODEL?.trim() || "tts-1";
     const elevenModel = process.env.ELEVENLABS_MODEL_ID?.trim() || "eleven_turbo_v2_5";
-    const openaiKey = env.OPENAI_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
     const elevenKey = process.env.ELEVENLABS_API_KEY?.trim() || "";
 
     const fontFile = "./assets/fonts/Montserrat-Bold.ttf";
@@ -134,7 +132,7 @@ async function runVideoPipeline() {
       cacheDir: introOutroCache,
       elevenlabsApiKey: elevenKey || undefined,
       elevenlabsModelId: elevenModel,
-      openaiApiUrl: env.OPENAI_URL,
+      openaiApiUrl: process.env.OPENAI_URL || 'https://api.openai.com/v1',
     });
 
     const lang = quizzes[0]?.language || "en";
@@ -178,7 +176,7 @@ async function runVideoPipeline() {
       elevenlabsApiKey: elevenKey || undefined,
       elevenlabsModelId: elevenModel,
       openaiApiKey: openaiKey || undefined,
-      openaiApiUrl: env.OPENAI_URL,
+      openaiApiUrl: process.env.OPENAI_URL || 'https://api.openai.com/v1',
     } as any);
 
     console.log("\n🎉 Pipeline completed successfully!");

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, Upload, Tv, Camera, Loader2, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { useVideos, useUpload, useDeleteVideo } from '../api/videos';
+import { useCancelJob, useRetryJob, useJob } from '../api/jobs';
 import { formatBytes, formatDate } from '../lib/utils';
 import { authFetch } from '../hooks/useAuthBlob';
 import type { VideoItem } from '../types';
@@ -28,6 +29,10 @@ function VideoCard({ video }: { video: VideoItem }) {
   const uploadIG = useUpload('instagram');
   const uploadAll = useUpload('all');
   const del = useDeleteVideo();
+  const jobId = video.jobId;
+  const job = useJob(jobId);
+  const cancelJob = useCancelJob(jobId);
+  const retryJob = useRetryJob(jobId);
 
   const isReady = video.status === 'completed';
   const isGenerating = video.status === 'generating';
@@ -44,7 +49,8 @@ function VideoCard({ video }: { video: VideoItem }) {
     authFetch(`/api/videos/${video.id}/play`)
       .then(async (r) => (r.ok ? r.json() : Promise.reject(new Error('Play URL failed'))))
       .then((j) => {
-        const raw = typeof j?.url === 'string' ? j.url : null;
+        const jj = (typeof j === 'object' && j !== null) ? (j as { url?: unknown }) : null;
+        const raw = typeof jj?.url === 'string' ? jj.url : null;
         if (!raw) {
           setPlaySrc(null);
           return;
@@ -53,8 +59,7 @@ function VideoCard({ video }: { video: VideoItem }) {
         // If we get a same-origin relative stream URL, point it directly at the backend origin.
         if (import.meta.env.DEV && raw.startsWith('/')) {
           const apiOrigin =
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ((import.meta as any).env?.VITE_API_ORIGIN as string | undefined) ||
+            (typeof import.meta.env.VITE_API_ORIGIN === 'string' && import.meta.env.VITE_API_ORIGIN) ||
             'http://localhost:3000';
           setPlaySrc(`${apiOrigin}${raw}`);
           return;
@@ -92,21 +97,22 @@ function VideoCard({ video }: { video: VideoItem }) {
     setDeleting(true);
     del.mutate(video.id, {
       onSettled: () => setDeleting(false),
-      onError: (e: any) => alert(e?.message || 'Delete failed'),
+      onError: (e: unknown) => alert(e instanceof Error ? e.message : 'Delete failed'),
     });
   }
 
   return (
-    <div className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+    <div className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] overflow-hidden shadow-sm hover:shadow-md transition-shadow">
       <div className="relative group">
         {isReady && effectiveSrc ? (
           <video
             src={effectiveSrc}
-            className="w-full aspect-9/16 max-h-80 object-cover bg-black cursor-pointer"
+            className="w-full h-112 sm:h-120 lg:h-128 object-contain bg-black cursor-pointer"
             playsInline
             controls
             muted={!playing}
             preload="metadata"
+            title="Tap to play/pause. First tap will unmute."
             onClick={(e) => {
               const v = e.currentTarget;
               // iOS/Safari can be picky about programmatic playback; keep this directly on a user gesture.
@@ -120,7 +126,7 @@ function VideoCard({ video }: { video: VideoItem }) {
             }}
           />
         ) : (
-          <div className="w-full aspect-9/16 max-h-80 bg-black/50 flex items-center justify-center">
+          <div className="w-full h-112 sm:h-120 lg:h-128 bg-black/50 flex items-center justify-center">
             {video.status === 'generating' || (isReady && (playLoading || !playSrc)) ? (
               <div className="flex flex-col items-center gap-2 px-4 text-center">
                 <Loader2 size={32} className="animate-spin text-[hsl(var(--primary))]" />
@@ -136,7 +142,7 @@ function VideoCard({ video }: { video: VideoItem }) {
           </div>
         )}
         {isReady && effectiveSrc && !playing && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors pointer-events-none">
             <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
               <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
@@ -154,6 +160,12 @@ function VideoCard({ video }: { video: VideoItem }) {
           <span>{video.size > 0 ? formatBytes(video.size) : '--'}</span>
           <span>{formatDate(video.createdAt)}</span>
         </div>
+
+        {isReady && effectiveSrc && (
+          <p className="mb-3 text-[11px] text-[hsl(var(--muted-foreground))]">
+            Tip: tap the video to play/pause. First tap unmutes.
+          </p>
+        )}
 
         {isFailed && (
           <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
@@ -174,6 +186,8 @@ function VideoCard({ video }: { video: VideoItem }) {
             <button
               onClick={handleDownload}
               disabled={downloading}
+              title="Download the rendered MP4 to your device"
+              aria-label="Download video"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[hsl(var(--secondary))] text-xs font-medium hover:bg-[hsl(var(--secondary))]/80 transition-colors disabled:opacity-50"
             >
               {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
@@ -183,6 +197,8 @@ function VideoCard({ video }: { video: VideoItem }) {
             <button
               onClick={handleDelete}
               disabled={deleting}
+              title={isGenerating ? 'Stop the job and delete this video' : 'Delete this video permanently'}
+              aria-label={isGenerating ? 'Stop job and delete video' : 'Delete video'}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/10 text-xs font-medium text-red-400 hover:bg-red-600/20 transition-colors disabled:opacity-50"
             >
               {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
@@ -215,15 +231,74 @@ function VideoCard({ video }: { video: VideoItem }) {
             <button
               onClick={handleDelete}
               disabled={deleting}
+              title={isGenerating ? 'Stop the job and delete this video' : 'Delete this video permanently'}
+              aria-label={isGenerating ? 'Stop job and delete video' : 'Delete video'}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/10 text-xs font-medium text-red-400 hover:bg-red-600/20 transition-colors disabled:opacity-50"
             >
               {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
               {isGenerating ? 'Stop & delete' : 'Delete'}
             </button>
+            {isGenerating && (
+              <button
+                onClick={() => cancelJob.mutate()}
+                disabled={cancelJob.isPending}
+                title="Cancel the current generation job"
+                aria-label="Cancel generation job"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-600/10 text-xs font-medium text-yellow-400 hover:bg-yellow-600/20 transition-colors disabled:opacity-50"
+              >
+                {cancelJob.isPending ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
+                Cancel job
+              </button>
+            )}
+            {isFailed && (
+              <button
+                onClick={() => retryJob.mutate()}
+                disabled={retryJob.isPending}
+                title="Retry generating this video"
+                aria-label="Retry generation job"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[hsl(var(--primary))]/10 text-xs font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/20 transition-colors disabled:opacity-50"
+              >
+                {retryJob.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshIcon />}
+                Retry
+              </button>
+            )}
           </div>
         )}
+
+        {job.data?.events?.length ? (
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs text-[hsl(var(--muted-foreground))]">Job log</summary>
+            <div className="mt-2 max-h-32 overflow-auto rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--input))] p-2">
+              {job.data.events.slice(-20).map((e, idx) => (
+                <div key={idx} className="text-[11px] text-[hsl(var(--muted-foreground))]">
+                  <span className="font-medium">{e.stage}</span> — {e.message}
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="opacity-80">
+      <path
+        d="M20 12a8 8 0 1 1-2.34-5.66"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M20 4v6h-6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -237,6 +312,13 @@ function UploadBtn({ label, icon, mutation, color }: {
     <button
       onClick={() => mutation.mutate()}
       disabled={mutation.isPending}
+      title={
+        label === 'YouTube' ? 'Publish this video to YouTube Shorts' :
+        label === 'Instagram' ? 'Publish this video to Instagram Reels' :
+        label === 'All' ? 'Publish this video to both YouTube and Instagram' :
+        'Upload'
+      }
+      aria-label={`Upload to ${label}`}
       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${color} disabled:opacity-50`}
     >
       {mutation.isPending ? <Loader2 size={13} className="animate-spin" /> :

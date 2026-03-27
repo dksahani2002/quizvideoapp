@@ -14,7 +14,7 @@ export function useGenerateVideo() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (req: GenerateRequest) =>
-      api.post<{ success: boolean; jobId: string; status: string; quizCount: number }>('/api/videos/generate', req),
+      api.post<{ success: boolean; data: Array<{ jobId: string; videoId: string; status: string; topic: string }> }>('/api/videos/generate', req),
     onSuccess: () => {
       setTimeout(() => qc.invalidateQueries({ queryKey: ['videos'] }), 3000);
     },

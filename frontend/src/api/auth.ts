@@ -5,7 +5,7 @@ interface AuthResponse {
   success: boolean;
   data: {
     token: string;
-    user: { id: number; name: string; email: string };
+    user: { id: string; name: string; email: string; role?: 'user' | 'admin' };
   };
 }
 

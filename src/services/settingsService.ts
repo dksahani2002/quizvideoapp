@@ -1,4 +1,5 @@
 import { UserSettings } from '../db/models/UserSettings.js';
+import { decryptJson, encryptJson } from './cryptoService.js';
 
 export interface AppSettings {
   openai: {
@@ -21,9 +22,27 @@ export interface AppSettings {
     redirectUri: string;
     refreshToken: string;
   };
-  instagram: {
-    username: string;
-    password: string;
+  /**
+   * Instagram publishing via official Meta Graph API.
+   * Tokens are stored encrypted at rest.
+   */
+  instagramGraph: {
+    /** Facebook Page id that owns the connected Instagram Business account. */
+    pageId: string;
+    /** Instagram Business Account id. */
+    igUserId: string;
+    /** Long-lived access token (encrypted at rest). */
+    accessToken: string;
+    /** ISO timestamp when token expires (optional; some long-lived flows still expire). */
+    tokenExpiresAt: string;
+  };
+  brand: {
+    introScript: string;
+    outroScript: string;
+    ctaLine: string;
+    watermarkImage: string;
+    watermarkOpacity: number;
+    watermarkPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   };
   theme: {
     preset: string;
@@ -40,7 +59,15 @@ const DEFAULT_SETTINGS: AppSettings = {
   tts: { provider: 'system', voice: 'Alex' },
   elevenlabs: { apiKey: '', voiceId: '', voiceName: '', modelId: 'eleven_turbo_v2_5' },
   youtube: { clientId: '', clientSecret: '', redirectUri: '', refreshToken: '' },
-  instagram: { username: '', password: '' },
+  instagramGraph: { pageId: '', igUserId: '', accessToken: '', tokenExpiresAt: '' },
+  brand: {
+    introScript: 'Can you answer this? This quiz is about {{topic}}.',
+    outroScript: 'Follow for more quizzes. Like and subscribe.',
+    ctaLine: '',
+    watermarkImage: '',
+    watermarkOpacity: 0.75,
+    watermarkPosition: 'top-right',
+  },
   theme: {
     preset: 'deep-purple',
     customStops: [],
@@ -55,8 +82,27 @@ export async function loadSettings(userId: string): Promise<AppSettings> {
   try {
     const doc = await UserSettings.findOne({ userId });
     if (doc) {
-      const saved = JSON.parse(doc.settingsJson);
-      return deepMerge(DEFAULT_SETTINGS, saved) as AppSettings;
+      if (doc.settingsEnc) {
+        const saved = await decryptJson<any>(doc.settingsEnc);
+        return deepMerge(DEFAULT_SETTINGS, saved) as AppSettings;
+      }
+      // Legacy plaintext fallback (migrate lazily on read)
+      if (doc.settingsJson) {
+        const saved = JSON.parse(doc.settingsJson);
+        const merged = deepMerge(DEFAULT_SETTINGS, saved) as AppSettings;
+        // Best-effort migration: encrypt settings and clear plaintext.
+        // If encryption fails (e.g. missing KMS/APP_ENCRYPTION_KEY), we still return merged.
+        try {
+          const enc = await encryptJson(merged);
+          await UserSettings.updateOne(
+            { _id: doc._id },
+            { $set: { settingsEnc: enc, schemaVersion: 2 }, $unset: { settingsJson: '' } }
+          );
+        } catch {
+          // ignore
+        }
+        return merged;
+      }
     }
   } catch {
     // Fall through to defaults
@@ -67,11 +113,8 @@ export async function loadSettings(userId: string): Promise<AppSettings> {
 export async function saveSettings(userId: string, settings: Partial<AppSettings>): Promise<AppSettings> {
   const current = await loadSettings(userId);
   const merged = deepMerge(current, settings) as AppSettings;
-  await UserSettings.findOneAndUpdate(
-    { userId },
-    { userId, settingsJson: JSON.stringify(merged) },
-    { upsert: true }
-  );
+  const enc = await encryptJson(merged);
+  await UserSettings.findOneAndUpdate({ userId }, { userId, settingsEnc: enc, schemaVersion: 2 }, { upsert: true });
   return merged;
 }
 

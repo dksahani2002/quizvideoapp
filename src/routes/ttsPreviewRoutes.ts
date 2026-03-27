@@ -46,8 +46,8 @@ export function createTtsPreviewRoutes() {
         return;
       }
 
-      const openaiKey = settings.openai.apiKey || env.OPENAI_API_KEY;
-      const openaiUrl = settings.openai.apiUrl || env.OPENAI_URL;
+      const openaiKey = (settings.openai.apiKey || '').trim();
+      const openaiUrl = settings.openai.apiUrl || "https://api.openai.com/v1";
 
       let voice: string | undefined;
       if (tts === "elevenlabs") {

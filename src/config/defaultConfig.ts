@@ -56,5 +56,11 @@ export function getDefaultConfig(): RenderConfig {
     // Post-processing
     maxTotalDuration: 60, // 60 seconds
     speedUpIfExceeds: true,
+
+    // Captions (sidecars by default; burn-in optional)
+    captions: { enabled: true, burnIn: false },
+
+    // Watermark (optional)
+    watermark: { imagePath: '', opacity: 0.75, position: 'top-right' },
   };
 }

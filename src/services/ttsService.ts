@@ -23,6 +23,20 @@ function generateTTSHash(text: string, language: string, voice?: string): string
   return crypto.createHash('sha256').update(content).digest('hex');
 }
 
+async function isValidAudioFile(filePath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(filePath);
+    if (!stat.size || stat.size < 1000) return false;
+    const { stdout } = await execAsync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`
+    );
+    const dur = parseFloat((stdout || '').trim());
+    return Number.isFinite(dur) && dur > 0;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * OpenAI TTS service
  */
@@ -47,7 +61,9 @@ export class OpenAITTS implements TTSService {
     // Check cache
     try {
       await fs.access(cacheFile);
-      return cacheFile;
+      if (await isValidAudioFile(cacheFile)) return cacheFile;
+      // Corrupt/partial cache entry; remove and regenerate.
+      await fs.unlink(cacheFile).catch(() => {});
     } catch {
       // Not cached, generate
     }
@@ -79,6 +95,10 @@ export class OpenAITTS implements TTSService {
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       await fs.writeFile(cacheFile, buffer);
+      if (!(await isValidAudioFile(cacheFile))) {
+        await fs.unlink(cacheFile).catch(() => {});
+        throw new Error('OpenAI returned invalid audio payload');
+      }
       
       return cacheFile;
     } catch (error: any) {
@@ -110,7 +130,8 @@ export class SystemTTS implements TTSService {
     // Check cache
     try {
       await fs.access(cacheFile);
-      return cacheFile;
+      if (await isValidAudioFile(cacheFile)) return cacheFile;
+      await fs.unlink(cacheFile).catch(() => {});
     } catch {
       // Not cached, generate
     }
@@ -120,30 +141,47 @@ export class SystemTTS implements TTSService {
     
     // Create absolute paths
     const absoluteCacheFile = path.resolve(cacheFile);
-    const tempWav = absoluteCacheFile.replace('.mp3', '.wav');
+    const tempAiff = absoluteCacheFile.replace('.mp3', '.aiff');
+    const tempTxt = absoluteCacheFile.replace('.mp3', '.txt');
     
     try {
-      // Create temp file first
-      await fs.writeFile(tempWav, '');
-      
-      // macOS say command with m4a output (more reliable)
-      const tempM4a = absoluteCacheFile.replace('.mp3', '.m4a');
-      const escapedText = text.replace(/"/g, '\\"');
-      
-      // Use say with -o and let it auto-detect format
-      await execAsync(`say -v ${voice || 'Alex'} -o "${tempM4a}" "${escapedText}"`);
-      
-      // Convert to MP3 using absolute path
-      await execAsync(`ffmpeg -i "${tempM4a}" -ar 44100 -ac 2 -codec:a libmp3lame -q:a 4 -y "${absoluteCacheFile}" 2>/dev/null`);
-      
-      // Clean up temp files
-      await fs.unlink(tempM4a).catch(() => {});
-      await fs.unlink(tempWav).catch(() => {});
-      
+      await fs.writeFile(tempTxt, text, 'utf8');
+
+      // `say` on macOS outputs AIFF by default when using `-o`.
+      // Use a fixed PCM format to avoid producing invalid/corrupt audio on some setups.
+      try {
+        await execAsync(
+          `say -v ${JSON.stringify(voice || 'Alex')} -o "${tempAiff}" --data-format=LEI16@44100 -f "${tempTxt}"`
+        );
+      } catch {
+        // Some macOS `say` versions don't support --data-format. Fall back to default AIFF output.
+        await execAsync(
+          `say -v ${JSON.stringify(voice || 'Alex')} -o "${tempAiff}" -f "${tempTxt}"`
+        );
+      }
+
+      const aiffStat = await fs.stat(tempAiff).catch(() => null);
+      if (!aiffStat?.size || aiffStat.size < 1000) {
+        throw new Error(`Generated AIFF too small (${aiffStat?.size || 0} bytes)`);
+      }
+
+      // Convert to MP3.
+      // Keep stderr for debugging if ffmpeg fails.
+      await execAsync(
+        `ffmpeg -f aiff -i "${tempAiff}" -vn -ar 44100 -ac 2 -codec:a libmp3lame -q:a 4 -y "${absoluteCacheFile}"`
+      );
+
+      if (!(await isValidAudioFile(absoluteCacheFile))) {
+        throw new Error('Generated MP3 is invalid (ffprobe could not read duration)');
+      }
+
+      await fs.unlink(tempAiff).catch(() => {});
+      await fs.unlink(tempTxt).catch(() => {});
       return absoluteCacheFile;
     } catch (error: any) {
       // Clean up on error
-      await fs.unlink(tempWav).catch(() => {});
+      await fs.unlink(tempAiff).catch(() => {});
+      await fs.unlink(tempTxt).catch(() => {});
       throw new Error(`System TTS failed: ${error.message}`);
     }
   }
@@ -169,7 +207,8 @@ export class ElevenLabsTTS implements TTSService {
 
     try {
       await fs.access(cacheFile);
-      return cacheFile;
+      if (await isValidAudioFile(cacheFile)) return cacheFile;
+      await fs.unlink(cacheFile).catch(() => {});
     } catch {
       // Not cached
     }
@@ -202,6 +241,10 @@ export class ElevenLabsTTS implements TTSService {
 
     const arrayBuffer = await response.arrayBuffer();
     await fs.writeFile(cacheFile, Buffer.from(arrayBuffer));
+    if (!(await isValidAudioFile(cacheFile))) {
+      await fs.unlink(cacheFile).catch(() => {});
+      throw new Error('ElevenLabs returned invalid audio payload');
+    }
     return cacheFile;
   }
 }

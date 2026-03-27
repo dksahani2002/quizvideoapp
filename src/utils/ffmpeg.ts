@@ -115,6 +115,60 @@ export async function trimFinalVideoToAudioMaster(outputPath: string): Promise<v
   }
 }
 
+export async function burnInSubtitles(videoPath: string, srtPath: string): Promise<string> {
+  const out = videoPath.replace(/\.mp4$/i, '_subtitled.mp4');
+  const command = [
+    'ffmpeg',
+    '-y',
+    `-i "${videoPath}"`,
+    `-vf "subtitles='${srtPath.replace(/'/g, "'\\''")}'"`,
+    '-c:v libx264 -crf 22 -preset medium -pix_fmt yuv420p',
+    '-c:a copy',
+    '-movflags +faststart',
+    `"${out}"`,
+  ].join(' ');
+  await execAsync(command);
+  await fs.rename(out, videoPath);
+  return videoPath;
+}
+
+export async function overlayWatermark(
+  videoPath: string,
+  imagePath: string,
+  opts?: { opacity?: number; position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' }
+): Promise<void> {
+  const opacity = Math.min(1, Math.max(0, opts?.opacity ?? 0.75));
+  const pos = opts?.position || 'top-right';
+
+  // Scale watermark to ~14% width, keep aspect.
+  const scaled = 'scale=iw*0.14:-1';
+  const margin = 24;
+  const xy =
+    pos === 'top-left'
+      ? `x=${margin}:y=${margin}`
+      : pos === 'top-right'
+        ? `x=W-w-${margin}:y=${margin}`
+        : pos === 'bottom-left'
+          ? `x=${margin}:y=H-h-${margin}`
+          : `x=W-w-${margin}:y=H-h-${margin}`;
+
+  const out = videoPath.replace(/\.mp4$/i, '_watermarked.mp4');
+  const filter = `[1:v]${scaled},format=rgba,colorchannelmixer=aa=${opacity}[wm];[0:v][wm]overlay=${xy}`;
+  const command = [
+    'ffmpeg',
+    '-y',
+    `-i "${videoPath}"`,
+    `-i "${imagePath}"`,
+    `-filter_complex "${filter}"`,
+    '-c:v libx264 -crf 22 -preset medium -pix_fmt yuv420p',
+    '-c:a copy',
+    '-movflags +faststart',
+    `"${out}"`,
+  ].join(' ');
+  await execAsync(command);
+  await fs.rename(out, videoPath);
+}
+
 /**
  * Concatenate audio segments with a single deterministic encode.
  * No dynaudnorm / loudnorm — those can shift energy and misalign phase boundaries

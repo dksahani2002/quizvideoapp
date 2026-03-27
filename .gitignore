@@ -25,6 +25,11 @@ cache/
 !.env.example
 
 # -------------------------
+# Local config overrides (do not commit)
+# -------------------------
+config.local.json
+
+# -------------------------
 # Logs
 # -------------------------
 logs/
