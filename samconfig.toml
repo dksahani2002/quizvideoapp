@@ -8,7 +8,7 @@ confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
 parameter_overrides = "ContainerImageUri=\"779315395093.dkr.ecr.ap-south-1.amazonaws.com/mcq-shorts-agent:latest\" CorsOrigin=\"*\""
-image_repositories = []
+resolve_image_repos = true
 
 [default.global.parameters]
 region = "ap-south-1"

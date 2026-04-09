@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+!/usr/bin/env bash
 # Post-deploy / local smoke test: health → register → TTS preview (system voice).
 # Requires: curl, MongoDB reachable per .env, Node deps installed.
 # Usage: ./scripts/smoke.sh   or   SMOKE_PORT=40123 ./scripts/smoke.sh
