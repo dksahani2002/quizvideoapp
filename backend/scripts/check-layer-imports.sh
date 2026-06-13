@@ -32,6 +32,10 @@ check "detectFacade shim" "$SRC" "from ['\"].*/story/scene/detectFacade"
 check "mcq ttsResolution shim" "$SRC" "from ['\"].*/mcq/videoJob/ttsResolution"
 check "trailer→story/render/ffmpeg" "$SRC/trailer" "from ['\"].*/story/render/ffmpeg"
 
+check "auth→verticals|publish" "$SRC/auth" "from ['\"].*/(mcq|story|trailer|publish)/"
+check "publish→verticals|auth" "$SRC/publish" "from ['\"].*/(mcq|story|trailer|auth)/"
+check "common→auth|publish" "$SRC/common" "from ['\"].*/(auth|publish)/"
+
 if [[ "$fail" -ne 0 ]]; then
   echo "Layer import check failed."
   exit 1

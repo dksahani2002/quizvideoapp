@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getAnalyticsSummary, refreshYouTubeAnalytics } from '../services/analyticsService.js';
+import { getAnalyticsSummary, refreshYouTubeAnalytics } from '../../publish/services/analyticsService.js';
 
 export function createAnalyticsRoutes(): Router {
   const router = Router();

@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
-import { PublishJob } from '../../publish/db/models/PublishJob.js';
-import { loadSettings } from './settingsService.js';
+import { PublishJob } from '../db/models/PublishJob.js';
+import { loadSettings } from '../../common/services/settingsService.js';
 
 function makeYouTubeClient(creds: { clientId: string; clientSecret: string; redirectUri: string; refreshToken: string }) {
   const oauth2 = new google.auth.OAuth2(creds.clientId, creds.clientSecret, creds.redirectUri);
