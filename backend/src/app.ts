@@ -17,6 +17,7 @@ import { createUploadFilesRoutes } from './common/controllers/uploadFilesControl
 import { createVideoRoutes } from './mcq/controllers/videosController.js';
 import { createJobRoutes } from './mcq/controllers/jobsController.js';
 import { createStoryVideoRoutes } from './story/controllers/storyVideoController.js';
+import { createTrailerBreakdownRoutes } from './trailer/controllers/trailerBreakdownController.js';
 import { errorHandler } from './common/middleware/errorHandler.js';
 import { auditMiddleware } from './common/middleware/audit.js';
 import { frontendDistPath } from './common/config/paths.js';
@@ -79,6 +80,22 @@ export function createApp(env: EnvConfig): express.Application {
     legacyHeaders: false,
   });
 
+  const trailerBreakdownLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Math.max(1, parseInt(process.env.TRAILER_BREAKDOWN_RATE_LIMIT_MAX || '20', 10)),
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => {
+      if (req.method !== 'GET') return false;
+      const pathOnly = (req.originalUrl || req.url || '').split('?')[0];
+      return (
+        /\/trailer-breakdown\/jobs(\?|$)/.test(pathOnly) ||
+        /\/trailer-breakdown\/[^/]+\/(status|result|play)$/.test(pathOnly) ||
+        /\/trailer-breakdown\/files\/[^/]+\/output\.mp4$/.test(pathOnly)
+      );
+    },
+  });
+
   const storyVideoLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: Math.max(1, parseInt(process.env.STORY_VIDEO_RATE_LIMIT_MAX || '40', 10)),
@@ -119,6 +136,12 @@ export function createApp(env: EnvConfig): express.Application {
   app.use('/api/videos', createVideoRoutes(env));
   app.use('/api/jobs', authMiddleware, createJobRoutes());
   app.use('/api/story-video', authMiddleware, storyVideoLimiter, createStoryVideoRoutes(env));
+  app.use(
+    '/api/trailer-breakdown',
+    authMiddleware,
+    trailerBreakdownLimiter,
+    createTrailerBreakdownRoutes(env)
+  );
   app.use('/api/uploads', authMiddleware, createUploadFilesRoutes(env));
   app.use('/api/uploads', authMiddleware, createUploadRoutes(env));
 

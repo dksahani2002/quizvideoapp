@@ -13,6 +13,8 @@ import { PublishingPage } from './pages/Publishing';
 import { AdminPage } from './pages/Admin';
 import { StoryVideoEditor } from './features/story-video/pages/StoryVideoEditor';
 import { StoryVideoLibrary } from './features/story-video/pages/StoryVideoLibrary';
+import { TrailerBreakdownLibrary } from './features/trailer-breakdown/pages/TrailerBreakdownLibrary';
+import { TrailerBreakdownEditor } from './features/trailer-breakdown/pages/TrailerBreakdownEditor';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 
@@ -96,6 +98,8 @@ export default function App() {
             <Route path="/settings" element={<ProtectedLayout><SettingsPage /></ProtectedLayout>} />
             <Route path="/story-videos" element={<ProtectedLayout><StoryVideoLibrary /></ProtectedLayout>} />
             <Route path="/story-video" element={<ProtectedLayout><StoryVideoEditor /></ProtectedLayout>} />
+            <Route path="/trailer-breakdown" element={<ProtectedLayout><TrailerBreakdownLibrary /></ProtectedLayout>} />
+            <Route path="/trailer-breakdown/:jobId" element={<ProtectedLayout><TrailerBreakdownEditor /></ProtectedLayout>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

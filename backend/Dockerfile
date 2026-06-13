@@ -20,7 +20,7 @@ RUN npm install
 # Create Python venv and install packages
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install instagrapi
+RUN pip install instagrapi yt-dlp
 
 # Copy source and bundled assets (fonts/audio)
 COPY src ./src

@@ -1,6 +1,6 @@
 import { type RefObject } from 'react';
 import { Play, Pause } from 'lucide-react';
-import { apiUrlWithTokenForMedia } from '../../lib/mediaUrl';
+import { apiUrlWithTokenForMedia } from '../../../lib/mediaUrl';
 import {
   PREVIEW_OVERLAY_CORNER_CLASS,
   type PreviewImageOverlay,

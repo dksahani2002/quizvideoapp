@@ -1,5 +1,5 @@
 import type { StoryClip } from '../api';
-import { apiUrlWithTokenForMedia } from '../../lib/mediaUrl';
+import { apiUrlWithTokenForMedia } from '../../../lib/mediaUrl';
 import { clipIndexAtProgramTimeSec } from './storyTimelineUtils';
 
 export type PreviewImageOverlay = {

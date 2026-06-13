@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, PlusCircle, Settings, Film, LogOut, UploadCloud, Shield, Clapperboard, Library } from 'lucide-react';
+import { Home, PlusCircle, Settings, Film, LogOut, UploadCloud, Shield, Clapperboard, Library, ScanSearch } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -9,6 +9,7 @@ const links = [
   { to: '/videos', icon: Film, label: 'Video Library' },
   { to: '/story-videos', icon: Library, label: 'Story library' },
   { to: '/story-video', icon: Clapperboard, label: 'Story Video' },
+  { to: '/trailer-breakdown', icon: ScanSearch, label: 'Trailer Breakdown' },
   { to: '/publishing', icon: UploadCloud, label: 'Publishing' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

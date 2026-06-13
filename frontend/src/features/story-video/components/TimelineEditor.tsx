@@ -8,8 +8,8 @@ import {
   type SceneInfo,
   type StoryEditorImageAsset,
 } from '../api';
-import { cn } from '../../lib/utils';
-import { apiUrlWithTokenForMedia } from '../../lib/mediaUrl';
+import { cn } from '../../../lib/utils';
+import { apiUrlWithTokenForMedia } from '../../../lib/mediaUrl';
 import {
   clipOutputDurationSec,
   formatTimecode,

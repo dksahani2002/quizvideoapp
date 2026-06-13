@@ -38,17 +38,32 @@ export function useGenerateVideo() {
   });
 }
 
+export type UploadJobSource =
+  | { storyVideoJobId: string }
+  | { trailerBreakdownJobId: string };
+
 export function useUpload(
   platform: 'youtube' | 'instagram' | 'all',
-  /** When set, publishes this story-video job's MP4 (same as quiz flow but explicit source). */
-  storyVideoJobId?: string | null
+  /** Publish a specific story-video or trailer-breakdown job output. */
+  source?: UploadJobSource | string | null
 ) {
   return useMutation({
-    mutationFn: () =>
-      api.post<{ success: boolean; platforms: unknown; errors: string[]; hint?: string }>(
+    mutationFn: () => {
+      let body: Record<string, string> = {};
+      if (typeof source === 'string' && source) {
+        body = { storyVideoJobId: source };
+      } else if (source && typeof source === 'object') {
+        if ('trailerBreakdownJobId' in source && source.trailerBreakdownJobId) {
+          body = { trailerBreakdownJobId: source.trailerBreakdownJobId };
+        } else if ('storyVideoJobId' in source && source.storyVideoJobId) {
+          body = { storyVideoJobId: source.storyVideoJobId };
+        }
+      }
+      return api.post<{ success: boolean; platforms: unknown; errors: string[]; hint?: string }>(
         `/api/uploads/${platform}`,
-        storyVideoJobId ? { storyVideoJobId } : {}
-      ),
+        body
+      );
+    },
   });
 }
 
