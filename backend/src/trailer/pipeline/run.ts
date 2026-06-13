@@ -10,13 +10,13 @@ import {
 } from '../../common/db/models/TrailerBreakdownJob.js';
 import { loadSettings, resolveOpenAiCredentials } from '../../common/services/settingsService.js';
 import { createOpenAIClient, transcribeAudioVerbose } from '../../capabilities/ai/index.js';
-import { assignWhisperToSceneWindows } from '../../story/ai/openaiStory.js';
 import {
-  extractAudioWav16kMono,
+  assignWhisperToSceneWindows,
   buildSceneWindows,
+  extractAudioWav16kMono,
   getMediaDurationSec,
-} from '../../story/render/ffmpeg.js';
-import { resolveSceneCuts } from '../../story/scene/detectFacade.js';
+  resolveSceneCuts,
+} from '../../capabilities/media/index.js';
 import { uploadFileToS3, getPresignedGetUrl, resolveOutputBucket } from '../../common/services/s3Storage.js';
 import { downloadYoutubeVideo } from '../io/youtubeDownload.js';
 import { generateTrailerBreakdownScript } from '../ai/trailerAnalysis.js';

@@ -4,7 +4,7 @@ import { createReadStream } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { WhisperSegment, TranscribeVerboseResult } from './types.js';
-import { getMediaDurationSec } from '../../story/render/ffmpeg.js';
+import { getMediaDurationSec } from '../media/probe.js';
 
 const execAsync = promisify(exec);
 

@@ -2,7 +2,7 @@
  * PySceneDetect CLI integration for story scene cuts.
  *
  * Spawns `scenedetect` (or `python3 -m scenedetect`) and parses `list-scenes` stdout.
- * Caller: scene/detectFacade.ts when `sceneDetectionMode` includes pyscenedetect.
+ * Caller: capabilities/media/scene/detectFacade.ts when mode includes pyscenedetect.
  */
 import { execFile } from 'child_process';
 import { promisify } from 'util';

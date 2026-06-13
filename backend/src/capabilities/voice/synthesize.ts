@@ -9,7 +9,7 @@ import type OpenAI from 'openai';
 import { transcribeAudioVerbose } from '../ai/index.js';
 import type { AppSettings } from '../../common/services/settingsService.js';
 import type { NarrationSegment } from '../../story/lib/types.js';
-import { concatAudioFilesMp3, extractAudioWav16kMono } from '../../story/render/ffmpeg.js';
+import { concatAudioFilesMp3, extractAudioWav16kMono } from '../media/audio.js';
 import { createTtsFromSettings } from './ttsFactory.js';
 import { chunkScriptForTts } from './scriptChunker.js';
 

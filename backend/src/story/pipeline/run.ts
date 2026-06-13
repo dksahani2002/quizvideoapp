@@ -22,10 +22,14 @@ import { loadSettings, resolveOpenAiCredentials } from '../../common/services/se
 import {
   createOpenAIClient,
   transcribeAudioVerbose,
-  assignWhisperToSceneWindows,
   parseStoredVideoWhisper,
   type TranscribeVerboseResult,
 } from '../ai/openaiStory.js';
+import {
+  assignWhisperToSceneWindows,
+  buildSceneWindows,
+  resolveSceneCuts,
+} from '../../capabilities/media/index.js';
 import { translateLinesToEnglish } from '../ai/translate.js';
 import {
   matchNarrationToScenesByEmbeddings,
@@ -38,14 +42,12 @@ import {
   muxVideoWithAudio,
   extractAudioSegment,
   concatAudioFilesMp3,
-  buildSceneWindows,
   getMediaDurationSec,
 } from '../render/ffmpeg.js';
 import { estimatedDurationSec, narrationFromWhisper } from '../narration/narration.js';
 import { uploadFileToS3, getPresignedGetUrl, resolveOutputBucket } from '../../common/services/s3Storage.js';
 import type { SceneSegment, NarrationSegment } from '../lib/types.js';
 import { mergeStoryOptions } from '../lib/storyOptions.js';
-import { resolveSceneCuts } from '../scene/detectFacade.js';
 import { alignScriptToWhisperTimings } from '../narration/alignment.js';
 import { synthesizeScriptToNarration } from '../narration/ttsNarration.js';
 import { applySubtitlesAndBgm } from './finalize.js';
@@ -462,8 +464,17 @@ export async function runStoryVideoJob(jobId: string): Promise<void> {
           ? matchNarrationToScenesSequential(narration.length, scenes.length)
           : await matchNarrationToScenesByEmbeddings(
               openai,
-              narration.map((n) => n.text),
-              scenes.map((s) => s.text || `Scene ${s.index + 1}`)
+              narration.map((n) => ({
+                text: n.text,
+                startSec: n.startSec,
+                endSec: n.endSec,
+              })),
+              scenes.map((s) => ({
+                start: s.start,
+                end: s.end,
+                text: s.text || `Scene ${s.index + 1}`,
+              })),
+              scenes.length > 0 ? scenes[scenes.length - 1].end : await getMediaDurationSec(inputVideo)
             );
       await fs.writeFile(matchesPath, JSON.stringify(matches), 'utf8');
 

@@ -16,7 +16,7 @@ import {
   concatAudioFilesMp3,
   muxVideoWithAudio,
   getMediaDurationSec,
-} from '../../story/render/ffmpeg.js';
+} from '../../capabilities/media/index.js';
 
 const execFileAsync = promisify(execFile);
 
