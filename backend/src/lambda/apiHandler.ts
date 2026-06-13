@@ -15,7 +15,7 @@ export const handler: Handler = async (event, context, callback) => {
     assertProductionConfig(env);
     await initDatabase();
     if (process.env.SKIP_STUCK_RETRY_ON_COLD_START === "0") {
-      const { retryStuckJobs } = await import("../common/utils/jobRunner.js");
+      const { retryStuckJobs } = await import("../mcq/videoJob/jobRunner.js");
       await retryStuckJobs();
     }
     const app = createApp(env);

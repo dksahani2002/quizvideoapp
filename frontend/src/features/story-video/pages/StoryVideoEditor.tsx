@@ -26,8 +26,8 @@ import {
   InputModeTabs,
   StoryPhaseStepper,
   friendlyStageLabel,
-  friendlyStatusLabel,
 } from '../storyVideoUi';
+import { friendlyStatusLabel } from '../../../shared/jobs/friendlyLabels';
 import { VoiceSettingsPanel } from '../../../shared/voice/VoiceSettingsPanel';
 import type { VoiceOptions } from '../../../shared/voice/types';
 

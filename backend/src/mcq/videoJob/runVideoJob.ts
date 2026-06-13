@@ -12,7 +12,11 @@ import {
   setVideoProgress,
   videoRowExists,
 } from './progress.js';
-import { applyServerTtsFallback, resolveTtsFromRequest, type ResolvedTts } from './ttsResolution.js';
+import {
+  applyServerTtsFallback,
+  resolveTtsFromRequest,
+  type ResolvedTts,
+} from '../../capabilities/voice/index.js';
 import { runIntroOutroPhase } from './introOutroPhase.js';
 import { runMainRenderPhase } from './mainRenderPhase.js';
 import { finalizeCompletedVideo } from './finalizeCompleted.js';

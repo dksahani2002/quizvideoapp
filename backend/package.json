@@ -10,7 +10,8 @@
     "video": "tsx src/mcq/runVideoPipeline.ts",
     "test": "bash scripts/smoke.sh",
     "test:api": "bash scripts/api-test.sh",
-    "test:story": "bash scripts/story-dev-assets-smoke.sh && bash scripts/story-rerender-smoke.sh"
+    "test:story": "bash scripts/story-dev-assets-smoke.sh && bash scripts/story-rerender-smoke.sh",
+    "check:layers": "bash scripts/check-layer-imports.sh"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1018.0",
@@ -42,8 +43,10 @@
     "@types/morgan": "^1.9.4",
     "@types/multer": "^2.1.0",
     "@types/node": "^20.0.0",
+    "eslint": "^9.39.1",
     "tsx": "^4.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.46.4"
   },
   "main": "index.js",
   "author": "",

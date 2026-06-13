@@ -16,3 +16,11 @@ export type ResolvedTts = {
   elevenlabsModelId: string;
   openaiKey: string;
 };
+
+/** Timed narration line produced by synthesizeScriptToNarration. */
+export type TimedNarrationLine = {
+  index: number;
+  text: string;
+  startSec?: number;
+  endSec?: number;
+};

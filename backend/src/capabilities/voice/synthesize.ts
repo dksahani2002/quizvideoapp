@@ -8,13 +8,13 @@ import path from 'path';
 import type OpenAI from 'openai';
 import { transcribeAudioVerbose } from '../ai/index.js';
 import type { AppSettings } from '../../common/services/settingsService.js';
-import type { NarrationSegment } from '../../story/lib/types.js';
+import type { TimedNarrationLine } from './types.js';
 import { concatAudioFilesMp3, extractAudioWav16kMono } from '../media/audio.js';
 import { createTtsFromSettings } from './ttsFactory.js';
 import { chunkScriptForTts } from './scriptChunker.js';
 
 /**
- * Full script → TTS MP3(s) → Whisper → timed {@link NarrationSegment} list.
+ * Full script → TTS MP3(s) → Whisper → timed {@link TimedNarrationLine} list.
  *
  * Respects `ttsProvider` override and app Settings voice/model. Output MP3 is muxed
  * onto the final video in pipeline/run.ts.
@@ -27,7 +27,7 @@ export async function synthesizeScriptToNarration(params: {
   language: string;
   ttsProvider: 'inherit' | 'openai' | 'elevenlabs';
 }): Promise<{
-  narration: NarrationSegment[];
+  narration: TimedNarrationLine[];
   narrationMp3Path: string;
   /** Language Whisper inferred from the TTS output (if available). */
   detectedLanguage?: string;
@@ -63,7 +63,7 @@ export async function synthesizeScriptToNarration(params: {
   await extractAudioWav16kMono(narrationMp3Path, wav);
   const { segments: whisper, language: detectedLanguage } = await transcribeAudioVerbose(openai, wav);
 
-  const narration: NarrationSegment[] = whisper.map((w, index) => ({
+  const narration: TimedNarrationLine[] = whisper.map((w, index) => ({
     index,
     text: w.text.trim(),
     startSec: w.start,

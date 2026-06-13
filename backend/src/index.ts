@@ -7,7 +7,7 @@ import { BACKEND_ROOT, REPO_ROOT, frontendDistPath } from "./common/config/paths
 import { loadEnvConfig, assertProductionConfig } from "./common/config/envConfig.js";
 import { initDatabase } from "./common/db/connection.js";
 import { createApp } from "./app.js";
-import { retryStuckJobs } from "./common/utils/jobRunner.js";
+import { retryStuckJobs } from "./mcq/videoJob/jobRunner.js";
 
 loadDotenv({ path: path.join(REPO_ROOT, ".env") });
 loadDotenv({ path: path.join(BACKEND_ROOT, ".env") });

@@ -24,7 +24,7 @@ import {
   transcribeAudioVerbose,
   parseStoredVideoWhisper,
   type TranscribeVerboseResult,
-} from '../ai/openaiStory.js';
+} from '../../capabilities/ai/index.js';
 import {
   assignWhisperToSceneWindows,
   buildSceneWindows,
@@ -49,7 +49,7 @@ import { uploadFileToS3, getPresignedGetUrl, resolveOutputBucket } from '../../c
 import type { SceneSegment, NarrationSegment } from '../lib/types.js';
 import { mergeStoryOptions } from '../lib/storyOptions.js';
 import { alignScriptToWhisperTimings } from '../narration/alignment.js';
-import { synthesizeScriptToNarration } from '../narration/ttsNarration.js';
+import { synthesizeScriptToNarration } from '../../capabilities/voice/index.js';
 import { applySubtitlesAndBgm } from './finalize.js';
 import {
   computeNarrationRerenderInputsFingerprint,

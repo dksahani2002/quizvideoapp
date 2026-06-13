@@ -4,7 +4,7 @@ import type { Quiz } from '../../common/types/index.js';
 import type { AppSettings } from '../../common/services/settingsService.js';
 import { renderVideo } from '../videoRenderer.js';
 import type { GenerateRequestPayload } from './types.js';
-import type { ResolvedTts } from './ttsResolution.js';
+import type { ResolvedTts } from '../../capabilities/voice/index.js';
 
 /**
  * Quiz body + concat with intro/outro — full pipeline after intro/outro segments exist.

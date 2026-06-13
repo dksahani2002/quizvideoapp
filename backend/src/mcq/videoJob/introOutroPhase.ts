@@ -7,8 +7,7 @@ import { mergeVideoTheme } from '../utils/videoTheme.js';
 import { resolveFontFileForLanguage } from '../utils/quizFonts.js';
 import { getQuizUiStrings, resolveIntroOutroScripts } from '../../common/i18n/quizUiStrings.js';
 import type { GenerateRequestPayload } from './types.js';
-import type { ResolvedTts } from './ttsResolution.js';
-import { createIntroOutroTtsService } from './ttsResolution.js';
+import { createIntroOutroTtsService, type ResolvedTts } from '../../capabilities/voice/index.js';
 import { assetPath } from '../../common/config/paths.js';
 import {
   appendJobEvent,

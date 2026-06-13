@@ -3,7 +3,6 @@ import { FormSection } from '../../shared/ui/FormSection';
 import { PhaseStepper } from '../../shared/ui/PhaseStepper';
 import {
   friendlyStageLabel as sharedFriendlyStageLabel,
-  friendlyStatusLabel,
   STORY_STAGE_LABELS,
 } from '../../shared/jobs/friendlyLabels';
 
@@ -59,5 +58,3 @@ export function InputModeTabs<T extends string>({
 export function friendlyStageLabel(stage: string): string {
   return sharedFriendlyStageLabel(stage, STORY_STAGE_LABELS);
 }
-
-export { friendlyStatusLabel };

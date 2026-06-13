@@ -18,6 +18,6 @@ export async function queueVideoJob(videoId: string): Promise<void> {
     );
     return;
   }
-  const { runVideoJob } = await import('../../common/utils/jobRunner.js');
+  const { runVideoJob } = await import('../videoJob/jobRunner.js');
   void runVideoJob(videoId);
 }

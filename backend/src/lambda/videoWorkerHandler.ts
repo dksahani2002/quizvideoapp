@@ -3,7 +3,7 @@ import type { Handler } from "aws-lambda";
 import "dotenv/config";
 import { loadEnvConfig, assertProductionConfig } from "../common/config/envConfig.js";
 import { initDatabase } from "../common/db/connection.js";
-import { runVideoJob } from "../common/utils/jobRunner.js";
+import { runVideoJob } from "../mcq/videoJob/jobRunner.js";
 
 type WorkerEvent = { videoId?: string };
 

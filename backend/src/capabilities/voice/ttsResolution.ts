@@ -1,5 +1,4 @@
 import type { AppSettings } from '../../common/services/settingsService.js';
-import type { GenerateRequestPayload } from '../../mcq/videoJob/types.js';
 import type { ResolvedTts, VoiceOverrides, TtsProvider } from './types.js';
 
 export function resolveTtsFromSettings(
@@ -28,15 +27,12 @@ export function resolveTtsFromSettings(
   return { provider, voice, ttsModel, elevenlabsModelId, openaiKey };
 }
 
-/** MCQ generate-video request shape — keep for mcq vertical */
-export function resolveTtsFromRequest(req: GenerateRequestPayload, settings: AppSettings): ResolvedTts {
-  return resolveTtsFromSettings(settings, {
-    ttsProvider: req.ttsProvider,
-    ttsVoice: req.ttsVoice,
-    ttsModel: req.ttsModel,
-    systemVoice: req.systemVoice,
-    elevenlabsModelId: req.elevenlabsModelId,
-  });
+/** Resolve TTS from request-level voice fields (MCQ generate-video and similar). */
+export function resolveTtsFromRequest(
+  overrides: VoiceOverrides & { ttsProvider?: TtsProvider },
+  settings: AppSettings
+): ResolvedTts {
+  return resolveTtsFromSettings(settings, overrides);
 }
 
 /**
