@@ -9,7 +9,7 @@ import type OpenAI from 'openai';
 import { createTTSService } from '../../common/services/ttsService.js';
 import { resolveOpenAiCredentials, type AppSettings } from '../../common/services/settingsService.js';
 import { applyServerTtsFallback, resolveTtsFromRequest, type ResolvedTts } from '../../mcq/videoJob/ttsResolution.js';
-import { transcribeAudioVerbose } from '../ai/openaiStory.js';
+import { transcribeAudioVerbose } from '../../capabilities/ai/index.js';
 import type { NarrationSegment } from '../lib/types.js';
 import { concatAudioFilesMp3, extractAudioWav16kMono } from '../render/ffmpeg.js';
 

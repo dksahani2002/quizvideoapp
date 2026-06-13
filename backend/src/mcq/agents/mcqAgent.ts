@@ -3,36 +3,12 @@ import fs from "fs";
 import path from "path";
 import { quizLanguageDisplayName } from "../../common/i18n/quizLanguages.js";
 import { DEFAULT_MCQ_GUIDELINES } from "../constants/mcqGuidelinesDefault.js";
+import { extractJsonArray } from "../../capabilities/ai/jsonExtract.js";
 
 export interface MCQ {
   question: string;
   options: string[];
   answerIndex: number;
-}
-
-/**
- * 1. Clean markdown + garbage from AI output
- */
-function extractJson(text: string): string {
-  if (!text || typeof text !== "string") {
-    throw new Error("AI response is empty or not a string");
-  }
-
-  // Remove markdown code blocks
-  let cleaned = text
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
-
-  // Extract first JSON array
-  const start = cleaned.indexOf("[");
-  const end = cleaned.lastIndexOf("]");
-
-  if (start === -1 || end === -1) {
-    throw new Error("No JSON array found in AI response");
-  }
-
-  return cleaned.slice(start, end + 1);
 }
 
 /**
@@ -219,7 +195,7 @@ export async function generateMCQs(
     throw new Error("Empty response from AI");
   }
 
-  const jsonString = extractJson(aiText);
+  const jsonString = extractJsonArray(aiText);
   const mcqs: MCQ[] = JSON.parse(jsonString);
 
   validateMCQs(mcqs);

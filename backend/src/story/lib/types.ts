@@ -23,8 +23,4 @@ export type SceneSegment = {
   textOriginal?: string;
 };
 
-export type WhisperSegment = {
-  start: number;
-  end: number;
-  text: string;
-};
+export type { WhisperSegment } from '../../capabilities/ai/types.js';
