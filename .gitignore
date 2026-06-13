@@ -80,3 +80,13 @@ terraform.tfstate.*
 # -------------------------
 tmp/
 temp/
+
+# -------------------------
+# Large local media (dev/test — never commit)
+# -------------------------
+backend/assets/*.mkv
+backend/assets/*.m4a
+backend/assets/*.mp4
+backend/assets/*.mov
+backend/assets/*.webm
+!backend/assets/audio/**

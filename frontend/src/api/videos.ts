@@ -38,9 +38,17 @@ export function useGenerateVideo() {
   });
 }
 
-export function useUpload(platform: 'youtube' | 'instagram' | 'all') {
+export function useUpload(
+  platform: 'youtube' | 'instagram' | 'all',
+  /** When set, publishes this story-video job's MP4 (same as quiz flow but explicit source). */
+  storyVideoJobId?: string | null
+) {
   return useMutation({
-    mutationFn: () => api.post<{ success: boolean; platforms: unknown; errors: string[] }>(`/api/uploads/${platform}`, {}),
+    mutationFn: () =>
+      api.post<{ success: boolean; platforms: unknown; errors: string[]; hint?: string }>(
+        `/api/uploads/${platform}`,
+        storyVideoJobId ? { storyVideoJobId } : {}
+      ),
   });
 }
 
