@@ -6,10 +6,10 @@
 import {
   uploadLatestVideoToYouTube,
   YouTubeUploadResult,
-} from "../../publish/platforms/youtubeService.js";
+} from '../platforms/youtubeService.js';
 import {
   InstagramUploadResult,
-} from "../../publish/platforms/instagramService.js";
+} from '../platforms/instagramService.js';
 
 export interface UploadOrchestrationRequest {
   youtube?: boolean;

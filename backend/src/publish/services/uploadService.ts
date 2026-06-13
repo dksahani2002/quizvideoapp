@@ -1,24 +1,20 @@
-import fs from 'fs';
-import path from 'path';
-import mongoose from 'mongoose';
-
 import type { EnvConfig } from '../../common/config/envConfig.js';
-import { StoryVideoJob } from '../../common/db/models/StoryVideoJob.js';
-import { Video } from '../../common/db/models/Video.js';
 import { loadSettings } from '../../common/services/settingsService.js';
-import { downloadObjectToFile } from '../../common/services/s3Storage.js';
+import { resolvePublishOutput } from './resolveVideoSource.js';
 import {
   uploadToAllPlatforms,
   uploadToInstagramOnly,
   uploadToYouTubeOnly,
   type UploadOrchestrationResult,
-} from '../../common/services/uploadOrchestrator.js';
+} from '../orchestrator/uploadOrchestrator.js';
 
 export interface UploadServiceRequest {
   platforms?: ('youtube' | 'instagram')[];
   userId?: string;
   /** When set, upload this story-video job's output MP4 instead of the latest quiz video. */
   storyVideoJobId?: string;
+  /** When set, upload this trailer-breakdown job's output MP4. */
+  trailerBreakdownJobId?: string;
 }
 
 export interface PlatformUploadResponse {
@@ -48,7 +44,14 @@ export async function uploadToPlatforms(
 ): Promise<UploadServiceResponse> {
   try {
     const platforms = request.platforms || ['youtube', 'instagram'];
-    const topic = request.storyVideoJobId ? 'Story video' : envConfig.TOPIC || 'Quiz';
+    if (request.storyVideoJobId && request.trailerBreakdownJobId) {
+      throw new Error('Provide either storyVideoJobId or trailerBreakdownJobId, not both');
+    }
+    const topic = request.trailerBreakdownJobId
+      ? 'Trailer breakdown'
+      : request.storyVideoJobId
+        ? 'Story video'
+        : envConfig.TOPIC || 'Quiz';
     const userId = request.userId;
 
     // Multi-tenant: credentials must be configured per-user in Settings.
@@ -82,59 +85,26 @@ export async function uploadToPlatforms(
       );
     }
 
-    // Resolve the directory containing the MP4 for upload: explicit story job, else latest quiz Video.
-    // On AWS, videos are stored in S3 and referenced by Video.s3Bucket/s3Key or StoryVideoJob.outputVideoKey.
     let resolvedOutputDir = envConfig.OUTPUT_DIR;
+    let uploadTitle = topic;
     if (userId) {
-      if (request.storyVideoJobId) {
-        if (!mongoose.Types.ObjectId.isValid(request.storyVideoJobId)) {
-          throw new Error('Invalid story video job id');
-        }
-        const sj = await StoryVideoJob.findOne({
-          _id: request.storyVideoJobId,
-          userId: new mongoose.Types.ObjectId(userId),
-          status: 'completed',
-        }).lean();
-        if (!sj) {
-          throw new Error('Story video job not found or not completed');
-        }
-        const tmpDir = path.join(envConfig.TEMP_DIR || '/tmp', 'uploads', userId, 'story-publish');
-        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-        const outName = `story-${String(sj._id)}.mp4`;
-        const outPath = path.join(tmpDir, outName);
-        if (sj.s3Bucket && sj.outputVideoKey) {
-          await downloadObjectToFile(sj.s3Bucket, sj.outputVideoKey, outPath);
-        } else {
-          const inter = sj.intermediate as { finalPath?: string } | undefined;
-          const fp = inter?.finalPath;
-          if (!fp || !fs.existsSync(fp)) {
-            throw new Error(
-              'Story video output is not on disk (use S3 output bucket) or path missing — cannot upload to YouTube'
-            );
-          }
-          fs.copyFileSync(fp, outPath);
-        }
-        resolvedOutputDir = tmpDir;
-      } else {
-        const latest = await Video.findOne({ userId, status: 'completed' }).sort({ createdAt: -1 }).lean();
-        if (latest?.s3Bucket && latest?.s3Key) {
-          const tmpDir = path.join(envConfig.TEMP_DIR || '/tmp', 'uploads', userId);
-          if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-          const outPath = path.join(tmpDir, latest.filename || 'latest.mp4');
-          await downloadObjectToFile(latest.s3Bucket, latest.s3Key, outPath);
-          resolvedOutputDir = tmpDir;
-        } else {
-          // Local disk mode (dev)
-          resolvedOutputDir = path.join(envConfig.OUTPUT_DIR, userId);
-        }
-      }
+      const resolved = await resolvePublishOutput(
+        userId,
+        {
+          storyVideoJobId: request.storyVideoJobId,
+          trailerBreakdownJobId: request.trailerBreakdownJobId,
+        },
+        envConfig
+      );
+      resolvedOutputDir = resolved.outputDir;
+      uploadTitle = resolved.title;
     }
 
     let result: UploadOrchestrationResult;
 
     if (platforms.length === 1) {
       if (platforms[0] === 'youtube') {
-        const youtubeResult = await uploadToYouTubeOnly(resolvedOutputDir, topic, youtubeCredentials);
+        const youtubeResult = await uploadToYouTubeOnly(resolvedOutputDir, uploadTitle, youtubeCredentials);
         result = {
           success: youtubeResult.success,
           youtube: youtubeResult,
@@ -155,7 +125,7 @@ export async function uploadToPlatforms(
           instagram: platforms.includes('instagram'),
         },
         resolvedOutputDir,
-        topic,
+        uploadTitle,
         youtubeCredentials,
         instagramCredentials
       );

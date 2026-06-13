@@ -98,14 +98,20 @@ export function classifyInstagramFailure(errors: string[]): { status: number; hi
 export function createUploadRoutes(envConfig: EnvConfig): Router {
   const router = Router();
 
+  function uploadIdsFromBody(body: unknown): Pick<UploadServiceRequest, 'storyVideoJobId' | 'trailerBreakdownJobId'> {
+    const b = body as { storyVideoJobId?: unknown; trailerBreakdownJobId?: unknown };
+    return {
+      storyVideoJobId:
+        typeof b.storyVideoJobId === 'string' ? b.storyVideoJobId : undefined,
+      trailerBreakdownJobId:
+        typeof b.trailerBreakdownJobId === 'string' ? b.trailerBreakdownJobId : undefined,
+    };
+  }
+
   router.post('/all', async (req: Request, res: Response) => {
     try {
-      const storyVideoJobId =
-        typeof (req.body as { storyVideoJobId?: unknown })?.storyVideoJobId === 'string'
-          ? (req.body as { storyVideoJobId: string }).storyVideoJobId
-          : undefined;
       const response = await uploadToPlatforms(
-        { platforms: ['youtube', 'instagram'], userId: req.user?.id, storyVideoJobId },
+        { platforms: ['youtube', 'instagram'], userId: req.user?.id, ...uploadIdsFromBody(req.body) },
         envConfig
       );
 
@@ -131,12 +137,8 @@ export function createUploadRoutes(envConfig: EnvConfig): Router {
 
   router.post('/youtube', async (req: Request, res: Response) => {
     try {
-      const storyVideoJobId =
-        typeof (req.body as { storyVideoJobId?: unknown })?.storyVideoJobId === 'string'
-          ? (req.body as { storyVideoJobId: string }).storyVideoJobId
-          : undefined;
       const response = await uploadToPlatforms(
-        { platforms: ['youtube'], userId: req.user?.id, storyVideoJobId },
+        { platforms: ['youtube'], userId: req.user?.id, ...uploadIdsFromBody(req.body) },
         envConfig
       );
 
@@ -162,12 +164,8 @@ export function createUploadRoutes(envConfig: EnvConfig): Router {
 
   router.post('/instagram', async (req: Request, res: Response) => {
     try {
-      const storyVideoJobId =
-        typeof (req.body as { storyVideoJobId?: unknown })?.storyVideoJobId === 'string'
-          ? (req.body as { storyVideoJobId: string }).storyVideoJobId
-          : undefined;
       const response = await uploadToPlatforms(
-        { platforms: ['instagram'], userId: req.user?.id, storyVideoJobId },
+        { platforms: ['instagram'], userId: req.user?.id, ...uploadIdsFromBody(req.body) },
         envConfig
       );
 
