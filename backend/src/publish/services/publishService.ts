@@ -1,15 +1,15 @@
 import type { Request } from 'express';
-import { loadEnvConfig } from '../config/envConfig.js';
-import { loadSettings, saveSettings } from './settingsService.js';
+import { loadEnvConfig } from '../../common/config/envConfig.js';
+import { loadSettings, saveSettings } from '../../common/services/settingsService.js';
 import { getYouTubeAuthUrl, exchangeYouTubeCode } from './youtubeOAuthService.js';
 import { connectInstagramGraph, publishReel } from './instagramGraphService.js';
 import { PublishJob } from '../db/models/PublishJob.js';
-import { Video } from '../db/models/Video.js';
-import { getPresignedGetUrl, downloadObjectToFile } from './s3Storage.js';
-import { uploadToYouTube } from './platforms/youtubeService.js';
+import { Video } from '../../common/db/models/Video.js';
+import { getPresignedGetUrl, downloadObjectToFile } from '../../common/services/s3Storage.js';
+import { uploadToYouTube } from '../platforms/youtubeService.js';
 import path from 'path';
 import fs from 'fs';
-import { ExportOnlyAdapter } from './publishers/exportAdapters.js';
+import { ExportOnlyAdapter } from '../publishers/exportAdapters.js';
 
 export function requireEnv(val: string | undefined, name: string): string {
   const v = (val || '').trim();

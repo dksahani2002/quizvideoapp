@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { PublishJob } from '../db/models/PublishJob.js';
+import { PublishJob } from '../../publish/db/models/PublishJob.js';
 import { loadSettings } from './settingsService.js';
 
 function makeYouTubeClient(creds: { clientId: string; clientSecret: string; redirectUri: string; refreshToken: string }) {

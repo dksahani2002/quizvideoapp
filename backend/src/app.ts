@@ -11,7 +11,7 @@ import type { EnvConfig } from './common/config/envConfig.js';
 import { authMiddleware, createAuthRoutes, createAdminRoutes } from './auth/index.js';
 import { createSettingsRoutes } from './common/controllers/settingsController.js';
 import { createTtsPreviewRoutes } from './common/controllers/ttsPreviewController.js';
-import { createPublishRoutes, handleYouTubeOAuthCallback } from './common/controllers/publishController.js';
+import { createPublishRoutes, handleYouTubeOAuthCallback } from './publish/index.js';
 import { createAnalyticsRoutes } from './common/controllers/analyticsController.js';
 import { createUploadFilesRoutes } from './common/controllers/uploadFilesController.js';
 import { createVideoRoutes } from './mcq/controllers/videosController.js';
