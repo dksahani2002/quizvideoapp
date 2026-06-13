@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../db/models/User.js';
-import { loadEnvConfig } from '../config/envConfig.js';
+import { User } from '../../common/db/models/User.js';
+import { loadEnvConfig } from '../../common/config/envConfig.js';
 
 export type AuthRole = 'user' | 'admin';
 

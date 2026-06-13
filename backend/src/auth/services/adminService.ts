@@ -1,5 +1,5 @@
-import { AuditEvent } from '../db/models/AuditEvent.js';
-import { User } from '../db/models/User.js';
+import { AuditEvent } from '../../common/db/models/AuditEvent.js';
+import { User } from '../../common/db/models/User.js';
 
 export async function listAdminUsers() {
   const users = await User.find({}).select('_id name email role createdAt').sort({ createdAt: -1 }).limit(200).lean();

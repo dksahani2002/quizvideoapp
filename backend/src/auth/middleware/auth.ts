@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { loadEnvConfig } from '../config/envConfig.js';
-import { User } from '../db/models/User.js';
+import { loadEnvConfig } from '../../common/config/envConfig.js';
+import { User } from '../../common/db/models/User.js';
 
 export interface AuthUser {
   id: string;

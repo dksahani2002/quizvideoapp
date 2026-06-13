@@ -9,7 +9,7 @@ import fs from 'fs';
 import jwt from 'jsonwebtoken';
 
 import type { EnvConfig } from '../../common/config/envConfig.js';
-import { authMiddleware } from '../../common/middleware/auth.js';
+import { authMiddleware } from '../../auth/index.js';
 import { streamS3ObjectToHttpResponse } from '../../common/services/s3Storage.js';
 import {
   deleteUserVideo,
