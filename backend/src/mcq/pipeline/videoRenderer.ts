@@ -7,7 +7,7 @@ import { Quiz, RenderConfig } from '../../common/types/index.js';
 import { renderSilentVideo } from '../../common/utils/ffmpeg.js';
 import { sanitizeForFFmpeg } from '../../common/utils/textSanitizer.js';
 import { resolveFontFileForLanguage } from '../utils/quizFonts.js';
-import { getQuizUiStrings } from '../utils/quizUiStrings.js';
+import { getQuizUiStrings } from '../../common/i18n/quizUiStrings.js';
 import path from 'path';
 
 /**

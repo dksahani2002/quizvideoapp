@@ -30,7 +30,7 @@ import path from "path";
 import fs from "fs";
 import { mergeVideoTheme } from "./utils/videoTheme.js";
 import { resolveFontFileForLanguage } from "./utils/quizFonts.js";
-import { getQuizUiStrings, resolveIntroOutroScripts } from "./utils/quizUiStrings.js";
+import { getQuizUiStrings, resolveIntroOutroScripts } from "../common/i18n/quizUiStrings.js";
 
 loadDotenv({ path: path.join(REPO_ROOT, ".env") });
 loadDotenv({ path: path.join(BACKEND_ROOT, ".env") });

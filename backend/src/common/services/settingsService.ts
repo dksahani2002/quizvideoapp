@@ -1,6 +1,6 @@
 import { UserSettings } from '../db/models/UserSettings.js';
 import { decryptJson, encryptJson } from './cryptoService.js';
-import { BRAND_DEFAULTS_EN } from '../../mcq/utils/quizUiStrings.js';
+import { BRAND_DEFAULTS_EN } from '../i18n/quizUiStrings.js';
 
 export interface AppSettings {
   openai: {

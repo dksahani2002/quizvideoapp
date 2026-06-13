@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import { quizLanguageDisplayName } from './quizLanguages.js';
+import { quizLanguageDisplayName } from '../../common/i18n/quizLanguages.js';
 
 export interface TopicPrepOptions {
   apiKey: string;

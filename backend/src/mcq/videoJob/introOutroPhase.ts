@@ -5,7 +5,7 @@ import type { Quiz, VideoTheme } from '../../common/types/index.js';
 import type { AppSettings } from '../../common/services/settingsService.js';
 import { mergeVideoTheme } from '../utils/videoTheme.js';
 import { resolveFontFileForLanguage } from '../utils/quizFonts.js';
-import { getQuizUiStrings, resolveIntroOutroScripts } from '../utils/quizUiStrings.js';
+import { getQuizUiStrings, resolveIntroOutroScripts } from '../../common/i18n/quizUiStrings.js';
 import type { GenerateRequestPayload } from './types.js';
 import type { ResolvedTts } from './ttsResolution.js';
 import { createIntroOutroTtsService } from './ttsResolution.js';

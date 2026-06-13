@@ -1,7 +1,7 @@
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
-import { quizLanguageDisplayName } from "../utils/quizLanguages.js";
+import { quizLanguageDisplayName } from "../../common/i18n/quizLanguages.js";
 import { DEFAULT_MCQ_GUIDELINES } from "../constants/mcqGuidelinesDefault.js";
 
 export interface MCQ {

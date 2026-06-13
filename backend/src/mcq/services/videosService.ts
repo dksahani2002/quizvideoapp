@@ -9,7 +9,7 @@ import { VideoJob } from '../../common/db/models/VideoJob.js';
 import { generateMCQs, type MCQ, type MCQGenerationOptions } from '../agents/mcqAgent.js';
 import type { Quiz } from '../../common/types/index.js';
 import { queueVideoJob } from '../utils/queueVideoJob.js';
-import { normalizeQuizLanguage } from '../utils/quizLanguages.js';
+import { normalizeQuizLanguage } from '../../common/i18n/quizLanguages.js';
 import { prepareTopicForQuizGeneration } from '../utils/topicLocalization.js';
 import {
   getPresignedGetUrl,

@@ -10,7 +10,7 @@ import { sanitizeForTTS, generateCountdownText } from '../../common/utils/textSa
 import path from 'path';
 import fs from 'fs/promises';
 import { retryWithBackoff } from '../../common/utils/retry.js';
-import { getQuizUiStrings } from '../utils/quizUiStrings.js';
+import { getQuizUiStrings } from '../../common/i18n/quizUiStrings.js';
 
 /**
  * Build cumulative concats with the same encoder as the full voice track, then

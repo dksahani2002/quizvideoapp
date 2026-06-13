@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import { loadEnvConfig } from '../config/envConfig.js';
 import { loadSettings } from './settingsService.js';
 import { createTTSService } from './ttsService.js';
-import { normalizeQuizLanguage } from '../../mcq/utils/quizLanguages.js';
+import { normalizeQuizLanguage } from '../i18n/quizLanguages.js';
 
 const PREVIEW_MAX_CHARS = 500;
 
