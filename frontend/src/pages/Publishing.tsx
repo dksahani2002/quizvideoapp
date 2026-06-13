@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 
 export function PublishingPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [ytUrl, setYtUrl] = useState<string>('');
   const [igUrl, setIgUrl] = useState<string>('');
   const [msg, setMsg] = useState<string>('');
@@ -23,6 +24,20 @@ export function PublishingPage() {
       if (redirectTimer.current) window.clearTimeout(redirectTimer.current);
     };
   }, []);
+
+  useEffect(() => {
+    const yt = searchParams.get('youtube');
+    if (!yt) return;
+    const message = searchParams.get('message') || '';
+    if (yt === 'connected') {
+      setMsg('YouTube connected successfully. You can upload and schedule publishes now.');
+      setError('');
+    } else if (yt === 'error') {
+      setError(message || 'YouTube connection failed');
+      setMsg('');
+    }
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   async function loadYouTubeConnect() {
     setMsg('');
@@ -90,6 +105,12 @@ export function PublishingPage() {
       </div>
 
       <div className="space-y-6">
+        {msg && !error && (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+            <p className="text-sm font-medium text-emerald-400">Success</p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{msg}</p>
+          </div>
+        )}
         {error && (
           <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
             <p className="text-sm font-medium text-red-400">Error</p>

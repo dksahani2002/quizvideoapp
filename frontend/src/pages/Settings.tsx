@@ -172,6 +172,21 @@ export function SettingsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Settings</h1>
         <p className="text-[hsl(var(--muted-foreground))]">Configure API credentials and preferences</p>
+        {import.meta.env.PROD && (
+          <p className="mt-3 text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-3 py-2 text-[hsl(var(--muted-foreground))]">
+            <strong className="text-[hsl(var(--foreground))]">Production:</strong> add your own{' '}
+            <strong>OpenAI</strong>, <strong>ElevenLabs</strong> (if used), <strong>YouTube OAuth</strong>, and connect{' '}
+            <strong>Instagram</strong> below. Server environment variables are not used for your API keys in production.
+          </p>
+        )}
+        {import.meta.env.DEV && (
+          <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+            Development: you can set <code className="text-[11px]">OPENAI_*</code>, <code className="text-[11px]">YT_*</code>,{' '}
+            <code className="text-[11px]">ELEVENLABS_*</code> in <code className="text-[11px]">.env</code> and enable{' '}
+            <code className="text-[11px]">SETTINGS_FALLBACK_FROM_ENV</code> to pre-fill empty fields (not used when{' '}
+            <code className="text-[11px]">NODE_ENV=production</code>).
+          </p>
+        )}
       </div>
 
       <div className="space-y-8">

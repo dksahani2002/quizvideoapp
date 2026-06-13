@@ -1,0 +1,37 @@
+services:
+  mcq-shorts-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${MCQ_SHORTS_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      # Per-user credentials come from Settings only in production (SETTINGS_FALLBACK_FROM_ENV is ignored when NODE_ENV=production).
+      SETTINGS_FALLBACK_FROM_ENV: ${SETTINGS_FALLBACK_FROM_ENV:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      YT_CLIENT_ID: ${YT_CLIENT_ID}
+      YT_CLIENT_SECRET: ${YT_CLIENT_SECRET}
+      YT_REFRESH_TOKEN: ${YT_REFRESH_TOKEN}
+      IG_USERNAME: ${IG_USERNAME}
+      IG_PASSWORD: ${IG_PASSWORD}
+      OUTPUT_DIR: /app/output
+      TEMP_DIR: /tmp/video-processing
+    volumes:
+      - ./output:/app/output
+      - ./temp:/tmp/video-processing
+      - ./cache:/app/cache
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

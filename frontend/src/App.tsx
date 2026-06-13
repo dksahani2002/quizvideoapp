@@ -11,6 +11,8 @@ import { VideoLibrary } from './pages/VideoLibrary';
 import { SettingsPage } from './pages/Settings';
 import { PublishingPage } from './pages/Publishing';
 import { AdminPage } from './pages/Admin';
+import { StoryVideoEditor } from './features/story-video/pages/StoryVideoEditor';
+import { StoryVideoLibrary } from './features/story-video/pages/StoryVideoLibrary';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 
@@ -92,6 +94,8 @@ export default function App() {
             <Route path="/publishing" element={<ProtectedLayout><PublishingPage /></ProtectedLayout>} />
             <Route path="/admin" element={<ProtectedLayout><AdminPage /></ProtectedLayout>} />
             <Route path="/settings" element={<ProtectedLayout><SettingsPage /></ProtectedLayout>} />
+            <Route path="/story-videos" element={<ProtectedLayout><StoryVideoLibrary /></ProtectedLayout>} />
+            <Route path="/story-video" element={<ProtectedLayout><StoryVideoEditor /></ProtectedLayout>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
