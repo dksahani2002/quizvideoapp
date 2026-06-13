@@ -13,14 +13,23 @@ import {
   type StoryJobOptions,
   type SceneInfo,
 } from '../api';
-import { useUpload } from '../../api/videos';
-import { authFetch } from '../../hooks/useAuthBlob';
+import { useUpload } from '../../../api/videos';
+import { authFetch } from '../../../hooks/useAuthBlob';
 import { TimelineEditor, ClipInspectorPanel } from '../components/TimelineEditor';
 import { StoryProgramPreview } from '../components/StoryProgramPreview';
 import { activeClipImageOverlayAtTime } from '../components/storyPreviewOverlay';
 import { programStartSecForClipIndex } from '../components/storyTimelineUtils';
-import { apiUrlWithTokenForMedia } from '../../lib/mediaUrl';
+import { apiUrlWithTokenForMedia } from '../../../lib/mediaUrl';
 import { useStoryTimelineHistory } from '../hooks/useStoryTimelineHistory';
+import {
+  FormSection,
+  InputModeTabs,
+  StoryPhaseStepper,
+  friendlyStageLabel,
+  friendlyStatusLabel,
+} from '../storyVideoUi';
+import { VoiceSettingsPanel } from '../../../shared/voice/VoiceSettingsPanel';
+import type { VoiceOptions } from '../../../shared/voice/types';
 
 const DEFAULT_OPTIONS: StoryJobOptions = {
   sceneDetectionMode: 'hybrid',
@@ -102,6 +111,9 @@ export function StoryVideoEditor() {
   const [programTimeSec, setProgramTimeSec] = useState(0);
   const [programDurationSec, setProgramDurationSec] = useState(0);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [videoInputMode, setVideoInputMode] = useState<'file' | 'url'>('file');
+  const [audioInputMode, setAudioInputMode] = useState<'file' | 'url'>('file');
+  const [bgmInputMode, setBgmInputMode] = useState<'none' | 'file' | 'url'>('none');
 
   const uploadYT = useUpload('youtube', jobId || undefined);
   const uploadIG = useUpload('instagram', jobId || undefined);
@@ -542,12 +554,16 @@ export function StoryVideoEditor() {
 
   return (
     <div
-      className={`mx-auto space-y-8 ${phase === 'editor' ? 'max-w-[min(1680px,calc(100vw-2rem))] w-full' : 'max-w-4xl'}`}
+      className={`mx-auto space-y-6 ${phase === 'editor' ? 'max-w-[min(1680px,calc(100vw-2rem))] w-full' : 'max-w-3xl'}`}
     >
+      {phase !== 'editor' && <StoryPhaseStepper phase={phase} />}
+
       {phase !== 'editor' && (
         <div>
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Story AI Video Editor</h1>
+            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+              {phase === 'processing' ? 'Building your story video' : 'Create story video'}
+            </h1>
             <Link
               to="/story-videos"
               className="text-sm font-medium text-[hsl(var(--primary))] hover:underline shrink-0"
@@ -555,18 +571,16 @@ export function StoryVideoEditor() {
               Story library
             </Link>
           </div>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-            Production pipeline: hybrid scene detection (FFmpeg + optional PySceneDetect), Whisper transcription,
-            embedding-based matching, TTS for script-only narration, subtitles (burn-in + SRT), background music, export
-            presets, and per-clip image overlays on re-render. Configure OpenAI in Settings; optional ElevenLabs via TTS
-            provider override.
-          </p>
-          {import.meta.env.PROD && (
-            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-3 py-2">
-              <strong className="text-[hsl(var(--foreground))]">Production:</strong> upload video, narration, and optional
-              BGM to your S3 bucket, then paste <strong>presigned GET</strong> URLs (or <code className="text-[11px]">s3://…</code>{' '}
-              if this server can read them). The API downloads from those URLs for analysis—direct file upload to this
-              endpoint is disabled.
+          {phase === 'upload' && (
+            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-2 leading-relaxed">
+              Upload source footage and narration. The app detects scenes, aligns your script or voiceover, and opens
+              an editor when the first cut is ready.
+            </p>
+          )}
+          {phase === 'upload' && import.meta.env.PROD && (
+            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-3 py-2 leading-relaxed">
+              In production, upload files to S3 first, then paste a <strong>presigned GET URL</strong> (the long link
+              with query parameters) or an <code className="text-[11px]">s3://bucket/key</code> path the server can read.
             </p>
           )}
         </div>
@@ -575,14 +589,14 @@ export function StoryVideoEditor() {
       {phase === 'upload' && (
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6"
+          className="space-y-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6"
         >
           {jobId && (status === 'failed' || status === 'cancelled') && (
             <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-4 py-3 space-y-2">
-              <p className="text-sm">
-                Previous job {status === 'cancelled' ? 'was cancelled' : 'failed'}.
-                {error ? ` ${error}` : ''}
+              <p className="text-sm font-medium">
+                Previous job {status === 'cancelled' ? 'was cancelled' : 'failed'}
               </p>
+              {error && <p className="text-sm text-[hsl(var(--destructive))]">{error}</p>}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -603,17 +617,17 @@ export function StoryVideoEditor() {
                   }}
                   className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm"
                 >
-                  Clear and start new
+                  Start fresh
                 </button>
               </div>
             </div>
           )}
+
           {import.meta.env.DEV && (
             <div className="rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 px-4 py-3 space-y-2">
-              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Local dev: use files from backend/assets</p>
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">Local dev shortcut</p>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                Copies from <code className="text-[11px]">backend/assets/…</code> on the API server (no upload). Override names with{' '}
-                <code className="text-[11px]">VITE_STORY_DEV_VIDEO_ASSET</code> / <code className="text-[11px]">VITE_STORY_DEV_AUDIO_ASSET</code>.
+                Load test files from <code className="text-[11px]">backend/assets/</code> without uploading.
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -626,9 +640,11 @@ export function StoryVideoEditor() {
                     setVideoUrl('');
                     setAudioFile(null);
                     setAudioUrl('');
+                    setVideoInputMode('file');
+                    setAudioInputMode('file');
                   }}
                 >
-                  Use test video + audio from assets
+                  Use test video + audio
                 </button>
                 {(devVideoAsset || devAudioAsset) && (
                   <button
@@ -639,161 +655,227 @@ export function StoryVideoEditor() {
                       setDevAudioAsset('');
                     }}
                   >
-                    Clear dev assets
+                    Clear
                   </button>
                 )}
               </div>
               {(devVideoAsset || devAudioAsset) && (
                 <p className="text-xs font-mono text-[hsl(var(--muted-foreground))] break-all">
-                  video: {devVideoAsset || '—'} · audio: {devAudioAsset || '—'}
+                  {devVideoAsset || '—'} · {devAudioAsset || '—'}
                 </p>
               )}
             </div>
           )}
-          <div>
-            <label className="block text-sm font-medium mb-2">Video file (or use URL below)</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="file"
-                accept="video/*"
-                className="text-sm"
-                disabled={!!videoUrl.trim() || !!devVideoAsset.trim()}
-                onChange={(e) => {
-                  const f = e.target.files?.[0] || null;
-                  setVideoFile(f);
-                  if (f) setDevVideoAsset('');
-                }}
-              />
-              <button
-                type="button"
-                disabled={submitting || !videoFile || !!videoUrl.trim() || !!devVideoAsset.trim()}
-                onClick={() => void uploadChosenFileToS3('video')}
-                className="rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs disabled:opacity-50"
-              >
-                Upload to S3 → fills URL
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Video URL (optional — not with file above)
-            </label>
-            <input
-              type="text"
-              className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-mono"
-              placeholder="Presigned https URL (long, with ?X-Amz-…=) or s3://bucket/key"
-              value={videoUrl}
-              onChange={(e) => {
-                setVideoUrl(e.target.value);
-                if (e.target.value.trim()) {
+
+          <FormSection
+            title="Source video"
+            description="The footage to cut scenes from. Required unless using the dev shortcut above."
+          >
+            <InputModeTabs
+              value={videoInputMode}
+              onChange={(mode) => {
+                setVideoInputMode(mode);
+                if (mode === 'file') {
+                  setVideoUrl('');
+                  setDevVideoAsset('');
+                } else {
                   setVideoFile(null);
                   setDevVideoAsset('');
                 }
               }}
+              disabled={!!devVideoAsset.trim()}
+              options={[
+                { value: 'file', label: 'Upload file' },
+                { value: 'url', label: 'Paste URL' },
+              ]}
             />
-            <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
-              A normal S3 “object URL” from the console (short <code className="text-[11px]">https://…amazonaws.com/…</code> with no
-              query string) is <strong>private</strong> and returns Access Denied when this app downloads it. On your phone: open the
-              object in the AWS console or S3 app → <strong>Share</strong> / <strong>presigned URL</strong> (GET), copy the full link and
-              paste it here. Or paste <code className="text-[11px]">s3://your-bucket/path/to/file.mp4</code> if the API server’s AWS
-              credentials have <code className="text-[11px]">s3:GetObject</code> on that bucket.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Narration audio (optional if script below)</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="file"
-                accept="audio/*"
-                className="text-sm"
-                disabled={!!audioUrl.trim() || !!devAudioAsset.trim()}
-                onChange={(e) => {
-                  const f = e.target.files?.[0] || null;
-                  setAudioFile(f);
-                  if (f) setDevAudioAsset('');
-                }}
-              />
-              <button
-                type="button"
-                disabled={submitting || !audioFile || !!audioUrl.trim()}
-                onClick={() => void uploadChosenFileToS3('audio')}
-                className="rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs disabled:opacity-50"
-              >
-                Upload to S3 → fills URL
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Narration audio URL (optional — not with file above)
-            </label>
-            <input
-              type="text"
-              className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-mono"
-              placeholder="Presigned https URL or s3://bucket/key"
-              value={audioUrl}
-              onChange={(e) => {
-                setAudioUrl(e.target.value);
-                if (e.target.value.trim()) {
+            {videoInputMode === 'file' ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="text-sm"
+                  disabled={!!devVideoAsset.trim()}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] || null;
+                    setVideoFile(f);
+                    if (f) setDevVideoAsset('');
+                  }}
+                />
+                {import.meta.env.PROD && (
+                  <button
+                    type="button"
+                    disabled={submitting || !videoFile || !!devVideoAsset.trim()}
+                    onClick={() => void uploadChosenFileToS3('video')}
+                    className="rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs disabled:opacity-50"
+                  >
+                    Upload to S3 → fill URL
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-mono"
+                  placeholder="Presigned https URL or s3://bucket/key"
+                  value={videoUrl}
+                  disabled={!!devVideoAsset.trim()}
+                  onChange={(e) => {
+                    setVideoUrl(e.target.value);
+                    if (e.target.value.trim()) {
+                      setVideoFile(null);
+                      setDevVideoAsset('');
+                    }
+                  }}
+                />
+                <details className="text-xs text-[hsl(var(--muted-foreground))]">
+                  <summary className="cursor-pointer hover:text-[hsl(var(--foreground))]">How to get a valid URL</summary>
+                  <p className="mt-2 leading-relaxed">
+                    Use a presigned GET link (includes <code className="text-[11px]">?X-Amz-…</code> query params), not
+                    the short console object URL. Or use <code className="text-[11px]">s3://bucket/path</code> if the API
+                    server has read access.
+                  </p>
+                </details>
+              </div>
+            )}
+          </FormSection>
+
+          <FormSection
+            title="Narration"
+            description="Provide a voice recording, a URL, and/or a script. At least one is required."
+          >
+            <InputModeTabs
+              value={audioInputMode}
+              onChange={(mode) => {
+                setAudioInputMode(mode);
+                if (mode === 'file') {
+                  setAudioUrl('');
+                  setDevAudioAsset('');
+                } else {
                   setAudioFile(null);
                   setDevAudioAsset('');
                 }
               }}
+              disabled={!!devAudioAsset.trim()}
+              options={[
+                { value: 'file', label: 'Audio file' },
+                { value: 'url', label: 'Audio URL' },
+              ]}
             />
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Same rule as video: use a <strong>presigned GET</strong> URL (with query parameters), not the bare object link, unless the
-              file is public.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Background music (optional, mixed under voice)</label>
-            <div className="flex flex-wrap items-center gap-2">
+            {audioInputMode === 'file' ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="file"
+                  accept="audio/*"
+                  className="text-sm"
+                  disabled={!!devAudioAsset.trim()}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] || null;
+                    setAudioFile(f);
+                    if (f) setDevAudioAsset('');
+                  }}
+                />
+                {import.meta.env.PROD && (
+                  <button
+                    type="button"
+                    disabled={submitting || !audioFile || !!devAudioAsset.trim()}
+                    onClick={() => void uploadChosenFileToS3('audio')}
+                    className="rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs disabled:opacity-50"
+                  >
+                    Upload to S3 → fill URL
+                  </button>
+                )}
+              </div>
+            ) : (
               <input
-                type="file"
-                accept="audio/*"
-                className="text-sm"
-                disabled={!!bgmSourceUrl.trim()}
-                onChange={(e) => setBgmFile(e.target.files?.[0] || null)}
+                type="text"
+                className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-mono"
+                placeholder="Presigned https URL or s3://bucket/key"
+                value={audioUrl}
+                disabled={!!devAudioAsset.trim()}
+                onChange={(e) => {
+                  setAudioUrl(e.target.value);
+                  if (e.target.value.trim()) {
+                    setAudioFile(null);
+                    setDevAudioAsset('');
+                  }
+                }}
               />
-              <button
-                type="button"
-                disabled={submitting || !bgmFile || !!bgmSourceUrl.trim()}
-                onClick={() => void uploadChosenFileToS3('bgm')}
-                className="rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs disabled:opacity-50"
-              >
-                Upload to S3 → fills URL
-              </button>
+            )}
+            <div>
+              <label className="block text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1.5">
+                Script text {audioFile || audioUrl.trim() || devAudioAsset ? '(optional — improves alignment)' : '(or use instead of audio for text-to-speech)'}
+              </label>
+              <textarea
+                className="w-full min-h-[100px] rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
+                placeholder="Paste your narration script here…"
+                value={scriptText}
+                onChange={(e) => setScriptText(e.target.value)}
+              />
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              BGM URL (optional — not with file above)
-            </label>
-            <input
-              type="text"
-              className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-mono"
-              placeholder="Presigned https URL or s3://bucket/key"
-              value={bgmSourceUrl}
-              onChange={(e) => {
-                setBgmSourceUrl(e.target.value);
-                if (e.target.value.trim()) setBgmFile(null);
-              }}
-            />
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Presigned GET or <code className="text-[11px]">s3://…</code> with server IAM access, same as narration URL.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Script / narration text (optional if audio above)</label>
-            <textarea
-              className="w-full min-h-[120px] rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
-              placeholder="Paste your narration. With audio: text is aligned to your recording. Script-only: TTS + Whisper timings."
-              value={scriptText}
-              onChange={(e) => setScriptText(e.target.value)}
-            />
-          </div>
+          </FormSection>
 
-          <div className="grid sm:grid-cols-2 gap-4 border-t border-[hsl(var(--border))] pt-4">
+          <FormSection title="Background music" description="Quiet track mixed under the voice." optional>
+            <InputModeTabs
+              value={bgmInputMode}
+              onChange={(mode) => {
+                setBgmInputMode(mode);
+                if (mode === 'none') {
+                  setBgmFile(null);
+                  setBgmSourceUrl('');
+                } else if (mode === 'file') {
+                  setBgmSourceUrl('');
+                } else {
+                  setBgmFile(null);
+                }
+              }}
+              options={[
+                { value: 'none', label: 'None' },
+                { value: 'file', label: 'Audio file' },
+                { value: 'url', label: 'Audio URL' },
+              ]}
+            />
+            {bgmInputMode === 'file' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="file"
+                  accept="audio/*"
+                  className="text-sm"
+                  onChange={(e) => setBgmFile(e.target.files?.[0] || null)}
+                />
+                {import.meta.env.PROD && (
+                  <button
+                    type="button"
+                    disabled={submitting || !bgmFile}
+                    onClick={() => void uploadChosenFileToS3('bgm')}
+                    className="rounded-md border border-[hsl(var(--border))] px-2 py-1 text-xs disabled:opacity-50"
+                  >
+                    Upload to S3 → fill URL
+                  </button>
+                )}
+              </div>
+            )}
+            {bgmInputMode === 'url' && (
+              <input
+                type="text"
+                className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-mono"
+                placeholder="Presigned https URL or s3://bucket/key"
+                value={bgmSourceUrl}
+                onChange={(e) => {
+                  setBgmSourceUrl(e.target.value);
+                  if (e.target.value.trim()) setBgmFile(null);
+                }}
+              />
+            )}
+          </FormSection>
+
+          <details className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))]/50 px-4 py-3 group">
+            <summary className="cursor-pointer text-sm font-medium text-[hsl(var(--foreground))] list-none flex items-center justify-between">
+              Advanced options
+              <span className="text-xs font-normal text-[hsl(var(--muted-foreground))] group-open:hidden">Scene detection, subtitles, export…</span>
+            </summary>
+            <div className="grid sm:grid-cols-2 gap-4 pt-4 mt-2 border-t border-[hsl(var(--border))]">
             <label className="text-sm">
               <span className="font-medium block mb-1">Scene detection</span>
               <select
@@ -840,20 +922,29 @@ export function StoryVideoEditor() {
                 <option value="quality">Quality (larger files)</option>
               </select>
             </label>
-            <label className="text-sm">
-              <span className="font-medium block mb-1">TTS provider (script-only)</span>
-              <select
-                className="w-full rounded-lg border border-[hsl(var(--border))] bg-background px-2 py-2 text-sm"
-                value={options.ttsProvider}
-                onChange={(e) =>
-                  setOptions((o) => ({ ...o, ttsProvider: e.target.value as StoryJobOptions['ttsProvider'] }))
+            <div className="sm:col-span-2">
+              <VoiceSettingsPanel
+                allowInherit
+                allowSystem={false}
+                reRenderHint={false}
+                previewText="This is a preview of the story narration voice."
+                value={{
+                  ttsProvider: options.ttsProvider,
+                  ttsVoice: '',
+                  ttsModel: 'tts-1',
+                  systemVoice: '',
+                  elevenlabsModelId: '',
+                  narrationLanguage: options.narrationLanguage,
+                }}
+                onChange={(voice: VoiceOptions) =>
+                  setOptions((o) => ({
+                    ...o,
+                    ttsProvider: voice.ttsProvider as StoryJobOptions['ttsProvider'],
+                    narrationLanguage: voice.narrationLanguage,
+                  }))
                 }
-              >
-                <option value="inherit">Use Settings</option>
-                <option value="openai">OpenAI</option>
-                <option value="elevenlabs">ElevenLabs</option>
-              </select>
-            </label>
+              />
+            </div>
             <label className="text-sm flex items-center gap-2 col-span-2">
               <input
                 type="checkbox"
@@ -882,15 +973,6 @@ export function StoryVideoEditor() {
               </select>
             </label>
             <label className="text-sm">
-              <span className="font-medium block mb-1">Narration language (TTS)</span>
-              <input
-                className="w-full rounded-lg border border-[hsl(var(--border))] bg-background px-2 py-2 text-sm"
-                value={options.narrationLanguage}
-                onChange={(e) => setOptions((o) => ({ ...o, narrationLanguage: e.target.value }))}
-                placeholder="en, hi, …"
-              />
-            </label>
-            <label className="text-sm">
               <span className="font-medium block mb-1">BGM volume (under voice)</span>
               <input
                 type="number"
@@ -902,40 +984,59 @@ export function StoryVideoEditor() {
                 onChange={(e) => setOptions((o) => ({ ...o, bgmVolume: parseFloat(e.target.value) || 0 }))}
               />
             </label>
-          </div>
+            </div>
+          </details>
 
-          {error && <p className="text-sm text-[hsl(var(--destructive))]">{error}</p>}
+          {error && !(jobId && (status === 'failed' || status === 'cancelled')) && (
+            <p className="text-sm text-[hsl(var(--destructive))]">{error}</p>
+          )}
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] px-4 py-2 text-sm font-medium disabled:opacity-50"
+            className="w-full sm:w-auto rounded-lg bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] px-6 py-2.5 text-sm font-medium disabled:opacity-50"
           >
-            {submitting ? 'Starting…' : 'Start render'}
+            {submitting ? 'Starting…' : 'Start processing'}
           </button>
         </form>
       )}
 
       {phase === 'processing' && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 space-y-4">
-          <h2 className="text-lg font-semibold">Processing</h2>
-          <div className="h-2 rounded-full bg-[hsl(var(--secondary))] overflow-hidden">
-            <div
-              className="h-full bg-[hsl(var(--primary))] transition-[width] duration-300"
-              style={{ width: `${Math.min(100, progressPercent)}%` }}
-            />
+        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 space-y-5">
+          <div className="space-y-1">
+            <p className="text-lg font-medium text-[hsl(var(--foreground))]">
+              {message || 'Starting…'}
+            </p>
+            {stage && (
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                {friendlyStageLabel(stage)}
+                {status ? ` · ${friendlyStatusLabel(status)}` : ''}
+              </p>
+            )}
           </div>
-          <p className="text-sm font-mono text-[hsl(var(--muted-foreground))]">
-            {status} · {stage} · {progressPercent}% · run {attempts}/{maxAttempts}
-          </p>
-          <p className="text-sm">{message}</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+              <span>{Math.min(100, progressPercent)}% complete</span>
+              {maxAttempts > 1 && (
+                <span>
+                  Attempt {attempts}/{maxAttempts}
+                </span>
+              )}
+            </div>
+            <div className="h-2.5 rounded-full bg-[hsl(var(--secondary))] overflow-hidden">
+              <div
+                className="h-full bg-[hsl(var(--primary))] transition-[width] duration-300"
+                style={{ width: `${Math.min(100, progressPercent)}%` }}
+              />
+            </div>
+          </div>
           {error && <p className="text-sm text-[hsl(var(--destructive))]">{error}</p>}
           {jobId && (
             <button
               type="button"
               onClick={handleCancel}
-              className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm"
+              className="rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm hover:bg-[hsl(var(--secondary))]"
             >
-              Cancel job
+              Cancel
             </button>
           )}
         </div>
@@ -943,11 +1044,16 @@ export function StoryVideoEditor() {
 
       {phase === 'editor' && (
         <div className="space-y-4">
-          <p className="text-sm text-[hsl(var(--muted-foreground))] md:max-w-3xl">
-            Program monitor and timeline work like a classic NLE: scrub the ruler, click clips to jump and edit in the
-            inspector, drag clips to reorder, drop images from the media bin onto clips. Re-render rebuilds the export from
-            your original upload — use <strong className="text-foreground">Save &amp; re-render</strong> after edits.
-          </p>
+          <StoryPhaseStepper phase={phase} />
+
+          <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+            <p className="font-medium text-[hsl(var(--foreground))] mb-1">How to edit</p>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs sm:text-sm">
+              <li>Scrub the timeline or click a clip to select it</li>
+              <li>Adjust timing and overlays in the panel on the right</li>
+              <li>Click <strong className="text-[hsl(var(--foreground))]">Export</strong> to rebuild the video after changes</li>
+            </ul>
+          </div>
 
           <div className="rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl overflow-hidden flex flex-col min-h-[min(88dvh,920px)] h-[min(88dvh,920px)]">
             <header className="shrink-0 flex flex-wrap items-center gap-2 px-3 py-2.5 border-b border-zinc-800 bg-zinc-900/90">
@@ -1009,9 +1115,10 @@ export function StoryVideoEditor() {
                   type="button"
                   onClick={handleSaveOnly}
                   disabled={rendering}
+                  title="Save timeline without re-rendering"
                   className="rounded-md border border-zinc-600 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
                 >
-                  Save
+                  Save draft
                 </button>
                 <button
                   type="button"
@@ -1019,7 +1126,7 @@ export function StoryVideoEditor() {
                   disabled={rendering}
                   className="rounded-md bg-cyan-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-cyan-500 disabled:opacity-50"
                 >
-                  {rendering ? 'Rendering…' : 'Export'}
+                  {rendering ? 'Exporting…' : 'Export video'}
                 </button>
                 {(outputSrtUrl || jobOptions.subtitleMode !== 'none') && (
                   <button
@@ -1027,9 +1134,10 @@ export function StoryVideoEditor() {
                     onClick={() =>
                       outputSrtUrl ? window.open(apiUrlWithTokenForMedia(outputSrtUrl), '_blank') : downloadSrt()
                     }
+                    title="Download subtitle file"
                     className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
                   >
-                    SRT
+                    Subtitles
                   </button>
                 )}
                 {jobId && playUrl && !previewBlocked && (
@@ -1041,7 +1149,7 @@ export function StoryVideoEditor() {
                       className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 inline-flex items-center gap-1 disabled:opacity-50"
                     >
                       {downloadingMp4 ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-                      MP4
+                      Download
                     </button>
                     <button
                       type="button"
@@ -1054,7 +1162,7 @@ export function StoryVideoEditor() {
                               | { youtube?: { url?: string; success?: boolean } }
                               | undefined;
                             const u = y?.youtube?.url;
-                            setPublishMessage(u ? `YouTube: ${u}` : 'YouTube done.');
+                            setPublishMessage(u ? `YouTube: ${u}` : 'Uploaded to YouTube.');
                           },
                           onError: (e) => setError(e instanceof Error ? e.message : String(e)),
                         });
@@ -1063,7 +1171,7 @@ export function StoryVideoEditor() {
                       className="rounded-md bg-red-950/80 border border-red-900 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-950 inline-flex items-center gap-1 disabled:opacity-50"
                     >
                       {uploadYT.isPending ? <Loader2 size={12} className="animate-spin" /> : <Tv size={12} />}
-                      YT
+                      YouTube
                     </button>
                     <button
                       type="button"
@@ -1074,10 +1182,10 @@ export function StoryVideoEditor() {
                         });
                       }}
                       disabled={uploadIG.isPending}
-                      title="Use Publishing for Meta"
+                      title="Use Publishing page for Instagram"
                       className="rounded-md border border-zinc-700 px-2 py-1.5 text-xs text-zinc-500 disabled:opacity-50"
                     >
-                      IG
+                      Instagram
                     </button>
                   </>
                 )}
@@ -1162,8 +1270,8 @@ export function StoryVideoEditor() {
           </div>
 
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            Options: scene={jobOptions.sceneDetectionMode}, subtitles={jobOptions.subtitleMode}, export=
-            {jobOptions.exportPreset}. Instagram:{' '}
+            Export settings: {jobOptions.exportPreset} quality, {jobOptions.subtitleMode.replace(/_/g, ' ')} subtitles.
+            Instagram uploads: use{' '}
             <Link to="/publishing" className="underline">
               Publishing
             </Link>
