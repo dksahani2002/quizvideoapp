@@ -58,6 +58,20 @@ import {
 } from './narrationRerender.js';
 import { buildRerenderClipPaths } from './rerenderClips.js';
 import type OpenAI from 'openai';
+import { createJobProgressHelpers, createRetryScheduler } from '../../capabilities/jobs/index.js';
+
+const jobProgress = createJobProgressHelpers(StoryVideoJob);
+const { setProgress, isCancelled, markCancelled, failJobPermanent, pushEvent } = jobProgress;
+
+const scheduleRetryOrFail = (jobId: string, error: string) =>
+  createRetryScheduler(StoryVideoJob, {
+    maxAttemptsEnvKey: 'STORY_VIDEO_MAX_JOB_ATTEMPTS',
+    defaultMax: 3,
+    requeue: async (requeueJobId) => {
+      const { queueStoryVideoJob } = await import('./queue.js');
+      void queueStoryVideoJob(requeueJobId);
+    },
+  })(jobId, error, jobProgress);
 
 async function applyEnglishTranslationIfNeeded(
   job: IStoryVideoJob,
@@ -104,77 +118,6 @@ async function pathExists(p: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function pushEvent(job: IStoryVideoJob, stage: string, message: string) {
-  const ev = [...(job.events || []), { at: new Date(), stage, message }];
-  job.events = ev.slice(-300) as typeof job.events;
-}
-
-async function setProgress(job: IStoryVideoJob, pct: number, stage: string, message: string) {
-  job.progressPercent = Math.min(100, Math.max(0, pct));
-  job.stage = stage;
-  job.progressMessage = message;
-  await pushEvent(job, stage, message);
-  await job.save();
-}
-
-async function isCancelled(jobId: string): Promise<boolean> {
-  const j = await StoryVideoJob.findById(jobId).select('cancelRequested').lean();
-  return !!(j && (j as { cancelRequested?: boolean }).cancelRequested);
-}
-
-async function markCancelled(job: IStoryVideoJob) {
-  job.status = 'cancelled';
-  job.stage = 'cancelled';
-  job.progressMessage = 'Cancelled';
-  job.progressPercent = 0;
-  job.idempotencyKey = '';
-  await pushEvent(job, 'cancelled', 'Cancelled by user');
-  await job.save();
-}
-
-function maxJobAttempts(job: IStoryVideoJob): number {
-  const n = job.maxAttempts;
-  if (n && n > 0) return n;
-  return Math.max(1, parseInt(process.env.STORY_VIDEO_MAX_JOB_ATTEMPTS || '3', 10));
-}
-
-async function failJobPermanent(job: IStoryVideoJob, error: string) {
-  job.status = 'failed';
-  job.stage = 'failed';
-  job.error = error;
-  job.progressMessage = error;
-  job.progressPercent = 0;
-  job.idempotencyKey = '';
-  await pushEvent(job, 'failed', error);
-  await job.save();
-}
-
-async function scheduleRetryOrFail(jobId: string, error: string): Promise<void> {
-  const job = await StoryVideoJob.findById(jobId);
-  if (!job) return;
-  const max = maxJobAttempts(job);
-  if (await isCancelled(job._id.toString())) {
-    await failJobPermanent(job, error);
-    return;
-  }
-  if (job.attempts < max) {
-    job.status = 'pending';
-    job.stage = 'queued';
-    job.progressMessage = `Will retry (${job.attempts}/${max}): ${error.slice(0, 200)}`;
-    job.error = error;
-    job.progressPercent = 0;
-    await pushEvent(job, 'retry_scheduled', error);
-    await job.save();
-    const delay = Math.min(120_000, 3000 * Math.pow(2, Math.max(0, job.attempts - 1)));
-    const { queueStoryVideoJob } = await import('./queue.js');
-    setTimeout(() => {
-      void queueStoryVideoJob(jobId);
-    }, delay);
-    return;
-  }
-  await failJobPermanent(job, error);
 }
 
 /**

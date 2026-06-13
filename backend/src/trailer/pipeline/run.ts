@@ -21,6 +21,34 @@ import { uploadFileToS3, getPresignedGetUrl, resolveOutputBucket } from '../../c
 import { downloadYoutubeVideo } from '../io/youtubeDownload.js';
 import { generateTrailerBreakdownScript } from '../ai/trailerAnalysis.js';
 import { assembleBreakdownVideo } from '../render/assembleBreakdown.js';
+import { createJobProgressHelpers, createRetryScheduler } from '../../capabilities/jobs/index.js';
+
+const jobProgress = createJobProgressHelpers(TrailerBreakdownJob);
+const { setProgress, isCancelled, markCancelled, failJobPermanent, pushEvent } = jobProgress;
+
+const scheduleRetryOrFail = (jobId: string, error: string) =>
+  createRetryScheduler(TrailerBreakdownJob, {
+    maxAttemptsEnvKey: 'TRAILER_BREAKDOWN_MAX_JOB_ATTEMPTS',
+    defaultMax: 3,
+    requeue: async (requeueJobId, job) => {
+      const { queueTrailerBreakdownJob } = await import('./queue.js');
+      const userId = job.userId.toString();
+      const workDir =
+        job.intermediate?.workDir ||
+        path.join(process.env.TEMP_DIR || './temp', 'trailer-breakdown', userId, requeueJobId);
+      const sourcePath = job.intermediate?.sourceVideoPath || path.join(workDir, 'source.mp4');
+      const hasScript = (job.breakdownScript?.length ?? 0) > 0;
+      let hasSource = false;
+      try {
+        await fs.access(sourcePath);
+        hasSource = true;
+      } catch {
+        hasSource = false;
+      }
+      const resumeOpts = hasScript && hasSource ? { renderOnly: true as const } : {};
+      void queueTrailerBreakdownJob(requeueJobId, resumeOpts);
+    },
+  })(jobId, error, jobProgress);
 
 async function ensureDir(p: string) {
   await fs.mkdir(p, { recursive: true });
@@ -33,92 +61,6 @@ async function pathExists(p: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function pushEvent(job: ITrailerBreakdownJob, stage: string, message: string) {
-  const ev = [...(job.events || []), { at: new Date(), stage, message }];
-  job.events = ev.slice(-300) as typeof job.events;
-}
-
-async function setProgress(job: ITrailerBreakdownJob, pct: number, stage: string, message: string) {
-  job.progressPercent = Math.min(100, Math.max(0, pct));
-  job.stage = stage;
-  job.progressMessage = message;
-  await pushEvent(job, stage, message);
-  await job.save();
-}
-
-async function isCancelled(jobId: string): Promise<boolean> {
-  const j = await TrailerBreakdownJob.findById(jobId).select('cancelRequested').lean();
-  return !!(j && (j as { cancelRequested?: boolean }).cancelRequested);
-}
-
-async function markCancelled(job: ITrailerBreakdownJob) {
-  job.status = 'cancelled';
-  job.stage = 'cancelled';
-  job.progressMessage = 'Cancelled';
-  job.progressPercent = 0;
-  job.idempotencyKey = '';
-  await pushEvent(job, 'cancelled', 'Cancelled by user');
-  await job.save();
-}
-
-function maxJobAttempts(job: ITrailerBreakdownJob): number {
-  const n = job.maxAttempts;
-  if (n && n > 0) return n;
-  return Math.max(1, parseInt(process.env.TRAILER_BREAKDOWN_MAX_JOB_ATTEMPTS || '3', 10));
-}
-
-async function failJobPermanent(job: ITrailerBreakdownJob, error: string) {
-  job.status = 'failed';
-  job.stage = 'failed';
-  job.error = error;
-  job.progressMessage = error;
-  job.progressPercent = 0;
-  job.idempotencyKey = '';
-  await pushEvent(job, 'failed', error);
-  await job.save();
-}
-
-async function scheduleRetryOrFail(jobId: string, error: string): Promise<void> {
-  const job = await TrailerBreakdownJob.findById(jobId);
-  if (!job) return;
-  const max = maxJobAttempts(job);
-  if (await isCancelled(job._id.toString())) {
-    await failJobPermanent(job, error);
-    return;
-  }
-  if (job.attempts < max) {
-    job.status = 'pending';
-    job.stage = 'queued';
-    job.progressMessage = `Will retry (${job.attempts}/${max}): ${error.slice(0, 200)}`;
-    job.error = error;
-    job.progressPercent = 0;
-    await pushEvent(job, 'retry_scheduled', error);
-    await job.save();
-    const delay = Math.min(120_000, 3000 * Math.pow(2, Math.max(0, job.attempts - 1)));
-    const { queueTrailerBreakdownJob } = await import('./queue.js');
-    const userId = job.userId.toString();
-    const workDir =
-      job.intermediate?.workDir ||
-      path.join(process.env.TEMP_DIR || './temp', 'trailer-breakdown', userId, jobId);
-    const sourcePath = job.intermediate?.sourceVideoPath || path.join(workDir, 'source.mp4');
-    const hasScript = (job.breakdownScript?.length ?? 0) > 0;
-    let hasSource = false;
-    try {
-      await fs.access(sourcePath);
-      hasSource = true;
-    } catch {
-      hasSource = false;
-    }
-    const resumeOpts =
-      hasScript && hasSource ? { renderOnly: true as const } : {};
-    setTimeout(() => {
-      void queueTrailerBreakdownJob(jobId, resumeOpts);
-    }, delay);
-    return;
-  }
-  await failJobPermanent(job, error);
 }
 
 /** Load breakdown script from MongoDB or cached JSON on disk. */
@@ -177,7 +119,7 @@ export async function runTrailerBreakdownJob(jobId: string, opts: RunTrailerOpti
   }
 
   if (!job.maxAttempts || job.maxAttempts < 1) {
-    job.maxAttempts = maxJobAttempts(job);
+    job.maxAttempts = Math.max(1, parseInt(process.env.TRAILER_BREAKDOWN_MAX_JOB_ATTEMPTS || '3', 10));
   }
   job.attempts = (job.attempts || 0) + 1;
 
